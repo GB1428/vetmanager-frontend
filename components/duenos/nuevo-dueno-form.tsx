@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 export function NuevoDuenoForm() {
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+<<<<<<< HEAD
     const datos = Object.fromEntries(new FormData(e.currentTarget));
   await fetch(`${API_URL}/duenos`, {
     method: "POST",
@@ -24,6 +25,9 @@ export function NuevoDuenoForm() {
       negocioId: { negocioId: NEGOCIO_ID },
     }),
   });
+=======
+    // TODO: mandar esto al backend
+>>>>>>> 9c2c2a8f9d63d21e21c9b0f76faf5646842b243d
   }
 
   return (

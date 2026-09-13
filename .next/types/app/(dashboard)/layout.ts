@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 // File: C:\Users\Daniel\Desktop\frontend\vetmanager-frontend-main\vetmanager-frontend-main\app\(dashboard)\layout.tsx
+=======
+// File: C:\Users\PC\Desktop\vetmanager-frontend\app\(dashboard)\layout.tsx
+>>>>>>> 9c2c2a8f9d63d21e21c9b0f76faf5646842b243d
 import * as entry from '../../../../app/(dashboard)/layout.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 

@@ -1,5 +1,15 @@
 {
   "/page": "app/page.js",
+<<<<<<< HEAD
   "/(dashboard)/dashboard/duenos/page": "app/(dashboard)/dashboard/duenos/page.js",
   "/(dashboard)/dashboard/page": "app/(dashboard)/dashboard/page.js"
+=======
+  "/(dashboard)/dashboard/page": "app/(dashboard)/dashboard/page.js",
+  "/(dashboard)/dashboard/solicitudes/page": "app/(dashboard)/dashboard/solicitudes/page.js",
+  "/(dashboard)/dashboard/pacientes/page": "app/(dashboard)/dashboard/pacientes/page.js",
+  "/(dashboard)/dashboard/pacientes/nuevo/page": "app/(dashboard)/dashboard/pacientes/nuevo/page.js",
+  "/(dashboard)/dashboard/duenos/page": "app/(dashboard)/dashboard/duenos/page.js",
+  "/(dashboard)/dashboard/duenos/nuevo/page": "app/(dashboard)/dashboard/duenos/nuevo/page.js",
+  "/(dashboard)/dashboard/agenda/nueva/page": "app/(dashboard)/dashboard/agenda/nueva/page.js"
+>>>>>>> 9c2c2a8f9d63d21e21c9b0f76faf5646842b243d
 }

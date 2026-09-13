@@ -7,8 +7,12 @@ import { DuenosTable } from "@/components/duenos/duenos-table";
 import type { Dueno } from "@/lib/types";
 
 // TODO: cuando exista el endpoint, traer los dueños de verdad acá (ver integracion-backend.txt)
+<<<<<<< HEAD
 //const duenos: Dueno[] = [];
 const duenos = await fetch(`${API_URL}/duenos`).then(r => r.json());
+=======
+const duenos: Dueno[] = [];
+>>>>>>> 9c2c2a8f9d63d21e21c9b0f76faf5646842b243d
 
 export default function DuenosPage() {
   return (

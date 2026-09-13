@@ -35,6 +35,7 @@ export function NuevoPacienteForm() {
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+<<<<<<< HEAD
      const datos = Object.fromEntries(new FormData(e.currentTarget));
   await fetch(`${API_URL}/mascotas`, {
     method: "POST",
@@ -53,6 +54,9 @@ export function NuevoPacienteForm() {
       id_dueno: { id_dueno: <id del dueño elegido> },
     }),
   });
+=======
+    // TODO: mandar esto al backend
+>>>>>>> 9c2c2a8f9d63d21e21c9b0f76faf5646842b243d
   }
 
   return (

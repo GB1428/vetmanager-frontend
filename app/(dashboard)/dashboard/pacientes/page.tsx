@@ -7,7 +7,11 @@ import { PacientesTable } from "@/components/pacientes/pacientes-table";
 import type { Paciente } from "@/lib/types";
 
 // TODO: cuando exista el endpoint, traer los pacientes de verdad acá
+<<<<<<< HEAD
 const pacientes = await fetch(`${API_URL}/mascotas`).then(r => r.json());
+=======
+const pacientes: Paciente[] = [];
+>>>>>>> 9c2c2a8f9d63d21e21c9b0f76faf5646842b243d
 
 export default function PacientesPage() {
   return (
