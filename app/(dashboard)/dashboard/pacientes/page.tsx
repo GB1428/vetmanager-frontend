@@ -6,7 +6,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { PacientesTable } from "@/components/pacientes/pacientes-table";
 import type { Paciente } from "@/lib/types";
 
-// TODO: cuando exista el endpoint, traer los pacientes de verdad acá (ver integracion-backend.txt)
+// TODO: cuando exista el endpoint, traer los pacientes de verdad acá
 const pacientes: Paciente[] = [];
 
 export default function PacientesPage() {

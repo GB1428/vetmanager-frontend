@@ -35,7 +35,7 @@ export function NuevoPacienteForm() {
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    // TODO: mandar esto al backend (ver integracion-backend.txt)
+    // TODO: mandar esto al backend
   }
 
   return (

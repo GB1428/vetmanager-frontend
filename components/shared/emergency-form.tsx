@@ -16,7 +16,7 @@ export function EmergencyForm() {
     e.preventDefault();
     const datos = Object.fromEntries(new FormData(e.currentTarget)) as Record<string, string>;
 
-    // TODO: guardar esto también en el backend, no solo local (ver integracion-backend.txt)
+    // TODO: guardar esto también en el backend, no solo local
     addSolicitud({
       nombreDueno: datos.nombre,
       rut: datos.rut,

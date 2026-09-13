@@ -39,7 +39,7 @@ export function NuevaCitaForm() {
 
   function handleConfirmar(e: React.FormEvent) {
     e.preventDefault();
-    // TODO: acá va la llamada al backend para crear la cita (ver integracion-backend.txt)
+    // TODO: acá va la llamada al backend para crear la cita
   }
 
   return (

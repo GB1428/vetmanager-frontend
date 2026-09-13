@@ -1,8 +1,8 @@
 import type { Solicitud } from "@/lib/types";
 
-// Ojo: esto guarda todo en localStorage como parche mientras no hay backend.
+// Esto guarda todo en localStorage como parche mientras no hay backend.
 // Solo persiste en este navegador. Cuando esté la API, cambiar las funciones
-// de acá abajo por fetch (ver integracion-backend.txt).
+// de acá abajo por fetch.
 
 const STORAGE_KEY = "vetmanager:solicitudes";
 
