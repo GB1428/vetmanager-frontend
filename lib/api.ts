@@ -4,7 +4,10 @@ import type { Paciente, Dueno, Solicitud, Cita, Boleta } from "@/lib/types";
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     ...options,
-    headers: { "Content-Type": "application/json", ...(options?.headers ?? {}) },
+    headers: {
+      "Content-Type": "application/json",
+      ...(options?.headers ?? {}),
+    },
     cache: "no-store",
   });
 
@@ -38,7 +41,7 @@ function mapDueno(d: DuenoBackend): Dueno {
 }
 
 export async function listarDuenos(): Promise<Dueno[]> {
-  const data = await request<DuenoBackend[]>("/duenos");
+  const data = await request<DuenoBackend[]>("/duenos?negocioId=1");
   return data.map(mapDueno);
 }
 
@@ -49,7 +52,7 @@ export async function crearDueno(datos: {
   correo: string;
   direccion: string;
 }): Promise<Dueno> {
-  const creado = await request<DuenoBackend>("/duenos", {
+  const creado = await request<DuenoBackend>("/duenos/1", {
     method: "POST",
     body: JSON.stringify({
       rut: datos.rut,
@@ -61,6 +64,66 @@ export async function crearDueno(datos: {
     }),
   });
   return mapDueno(creado);
+}
+
+type EspecieBackend = {
+  id_especie: number;
+  nombre_especie: string;
+};
+
+type RazaBackend = {
+  id_raza: number;
+  nombre_raza: string;
+};
+
+export async function listarEspecies(): Promise<EspecieBackend[]> {
+  return request<EspecieBackend[]>("/especies");
+}
+
+export async function listarRazas(): Promise<RazaBackend[]> {
+  return request<RazaBackend[]>("/razas");
+}
+
+function normalizarTexto(valor: string): string {
+  return valor
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+export async function buscarReferenciasMascota(
+  nombreEspecie: string,
+  nombreRaza: string,
+): Promise<{ idEspecie: number; idRaza: number }> {
+  const [especies, razas] = await Promise.all([
+    listarEspecies(),
+    listarRazas(),
+  ]);
+
+  const especie = especies.find(
+    (item) =>
+      normalizarTexto(item.nombre_especie) === normalizarTexto(nombreEspecie),
+  );
+
+  if (!especie) {
+    throw new Error(
+      `La especie "${nombreEspecie}" no existe en la base de datos.`,
+    );
+  }
+
+  const raza = razas.find(
+    (item) => normalizarTexto(item.nombre_raza) === normalizarTexto(nombreRaza),
+  );
+
+  if (!raza) {
+    throw new Error(`La raza "${nombreRaza}" no existe en la base de datos.`);
+  }
+
+  return {
+    idEspecie: especie.id_especie,
+    idRaza: raza.id_raza,
+  };
 }
 
 type MascotaBackend = {
@@ -101,6 +164,8 @@ export async function crearPaciente(datos: {
   nombre: string;
   especie: string;
   raza: string;
+  idEspecie: number;
+  idRaza: number;
   sexo: string;
   fechaNacimiento?: string;
   pesoKg: number;
@@ -116,6 +181,15 @@ export async function crearPaciente(datos: {
       nombre: datos.nombre,
       especie: datos.especie,
       raza: datos.raza,
+
+      id_especie: {
+        id_especie: datos.idEspecie,
+      },
+
+      id_raza: {
+        id_raza: datos.idRaza,
+      },
+
       sexo: datos.sexo,
       fecha_nacimiento: datos.fechaNacimiento || undefined,
       peso: datos.pesoKg,
@@ -123,9 +197,13 @@ export async function crearPaciente(datos: {
       observaciones: datos.observaciones,
       antecedentes: datos.antecedentes,
       alergias: datos.alergias,
-      id_dueno: { id_dueno: datos.idDueno },
+
+      id_dueno: {
+        id_dueno: datos.idDueno,
+      },
     }),
   });
+
   return mapPaciente(creado);
 }
 
@@ -149,13 +227,16 @@ function mapSolicitud(c: ContactoBackend): Solicitud {
     correo: c.dueno?.correo ?? "—",
     direccion: c.dueno?.direccion ?? "—",
     motivo: c.razon_consulta,
-    estado: estado === "aceptada" || estado === "rechazada" ? estado : "pendiente",
+    estado:
+      estado === "aceptada" || estado === "rechazada" ? estado : "pendiente",
     fechaCreacion: c.fecha_solicitud,
   };
 }
 
 export async function listarSolicitudes(): Promise<Solicitud[]> {
-  const data = await request<ContactoBackend[]>("/contacto-emergencia");
+  const data = await request<ContactoBackend[]>(
+    "/contacto-emergencia?negocioId=1",
+  );
   return data.map(mapSolicitud);
 }
 
@@ -188,40 +269,64 @@ export async function crearSolicitud(datos: {
 
 export async function actualizarEstadoSolicitud(
   id: string,
-  estado: Solicitud["estado"]
+  estado: Solicitud["estado"],
 ): Promise<Solicitud> {
-  const actualizada = await request<ContactoBackend>(`/contacto-emergencia/${id}`, {
-    method: "PATCH",
-    body: JSON.stringify({ estado }),
-  });
+  const actualizada = await request<ContactoBackend>(
+    `/contacto-emergencia/${id}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ estado }),
+    },
+  );
   return mapSolicitud(actualizada);
 }
 
 type CitaBackend = {
   id_cita: number;
-  fecha: string;
-  hora: string;
+  fecha_hora: string;
+
   motivo: string;
   estado: string;
   mascota?: MascotaBackend;
   dueno?: DuenoBackend;
 };
+function separarFechaHora(fechaHora: string): {
+  fecha: string;
+  hora: string;
+} {
+  const fecha = new Date(fechaHora);
 
+  return {
+    fecha: fecha.toISOString().slice(0, 10),
+    hora: fecha.toISOString().slice(11, 16),
+  };
+}
 function mapCita(c: CitaBackend): Cita {
+  const fechaHora = separarFechaHora(c.fecha_hora);
+
   return {
     id: String(c.id_cita),
-    fecha: c.fecha,
-    hora: c.hora,
-    motivo: c.motivo,
-    estado: c.estado,
-    mascotaId: c.mascota?.id_mascota != null ? String(c.mascota.id_mascota) : undefined,
+    fecha: fechaHora.fecha,
+    hora: fechaHora.hora,
+    motivo: c.motivo ?? "",
+    estado: c.estado ?? "",
+    mascotaId:
+      c.mascota?.id_mascota != null
+        ? String(c.mascota.id_mascota)
+        : undefined,
     mascotaNombre: c.mascota?.nombre ?? "—",
-    duenoId: c.dueno?.id_dueno != null ? String(c.dueno.id_dueno) : undefined,
+    duenoId:
+      c.dueno?.id_dueno != null
+        ? String(c.dueno.id_dueno)
+        : undefined,
     duenoNombre: c.dueno?.nombre_completo ?? "—",
   };
 }
 
-function calcularInstanteUtcParaHorarioChile(fechaISO: string, hora: string): Date {
+function calcularInstanteUtcParaHorarioChile(
+  fechaISO: string,
+  hora: string,
+): Date {
   const [anio, mes, dia] = fechaISO.split("-").map(Number);
   const [horas, minutos] = hora.split(":").map(Number);
   return new Date(Date.UTC(anio, mes - 1, dia, horas + 3, minutos, 0));
@@ -239,7 +344,7 @@ function construirFechaHoraParaBackend(fechaISO: string, hora: string): string {
 }
 
 export async function listarCitas(): Promise<Cita[]> {
-  const data = await request<CitaBackend[]>("/citas");
+  const data = await request<CitaBackend[]>("/citas?negocioId=1");
   return data.map(mapCita);
 }
 
@@ -251,14 +356,18 @@ export async function crearCita(datos: {
   idDueno: number;
   estado?: string;
 }): Promise<Cita> {
-  const creada = await request<CitaBackend>("/citas", {
+  const creada = await request<CitaBackend>("/citas/1", {
     method: "POST",
     body: JSON.stringify({
       fecha_hora: construirFechaHoraParaBackend(datos.fecha, datos.hora),
       motivo: datos.motivo,
       estado: datos.estado ?? "Pendiente",
-      id_mascota: datos.idMascota,
-      id_dueno: datos.idDueno,
+id_mascota: {
+  id_mascota: datos.idMascota,
+},
+id_dueno: {
+  id_dueno: datos.idDueno,
+},
     }),
   });
   return mapCita(creada);
@@ -283,7 +392,8 @@ function mapBoleta(b: BoletaBackend): Boleta {
     idBoleta: b.idBoleta,
     idCita: b.idCita ?? b.cita?.id_cita,
     idDueno: b.idDueno,
-    duenoNombre: b.dueno?.nombre_completo ?? b.cita?.dueno?.nombre_completo ?? "—",
+    duenoNombre:
+      b.dueno?.nombre_completo ?? b.cita?.dueno?.nombre_completo ?? "—",
     pacienteNombre: b.cita?.mascota?.nombre ?? "—",
     montoTotal: b.montoTotal,
     estadoPago: b.estadoPago,

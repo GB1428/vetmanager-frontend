@@ -96,11 +96,17 @@ export function NuevaCitaForm() {
         idDueno: Number(pacienteSeleccionado.duenoId),
       });
       router.push("/dashboard/agenda");
-    } catch (err) {
-      console.error("Error al registrar la cita:", err);
-      setError("No se pudo agendar la cita. Revisa que el backend esté corriendo e inténtalo de nuevo.");
-      setEnviando(false);
-    }
+} catch (err) {
+  console.error("Error al registrar la cita:", err);
+
+  setError(
+    err instanceof Error
+      ? err.message
+      : "No se pudo registrar la cita.",
+  );
+
+  setEnviando(false);
+}
   }
 
   return (

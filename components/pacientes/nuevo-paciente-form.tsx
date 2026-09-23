@@ -14,7 +14,10 @@ import {
   Info,
   Loader2,
 } from "lucide-react";
+import {
+  buscarReferenciasMascota
 
+} from "@/lib/api";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -52,41 +55,79 @@ export function NuevoPacienteForm() {
     setAlergias((prev) => (prev.trim().length === 0 ? tag : `${prev}, ${tag}`));
   }
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+ async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  e.preventDefault();
 
-    if (!duenoId) {
-      setError('Selecciona un tutor registrado antes de guardar (o créalo primero con "No hay Dueño").');
-      return;
-    }
-
-    const datos = Object.fromEntries(new FormData(e.currentTarget)) as Record<string, string>;
-    const color = datos.mascotaColor?.trim();
-    const motivo = datos.motivoIngreso?.trim();
-
-    setEnviando(true);
-    setError(null);
-    try {
-      await crearPaciente({
-        nombre: datos.mascotaNombre,
-        especie,
-        raza: datos.mascotaRaza,
-        sexo,
-        fechaNacimiento: datos.mascotaFechaNacimiento || undefined,
-        pesoKg: Number(datos.mascotaPesoKg),
-        microchip: datos.mascotaMicrochip ? Number(datos.mascotaMicrochip) : undefined,
-        observaciones: [motivo, color && `Color/señas: ${color}`].filter(Boolean).join(" — ") || undefined,
-        antecedentes: motivo || undefined,
-        alergias: alergias || undefined,
-        idDueno: Number(duenoId),
-      });
-      router.push("/dashboard/pacientes");
-    } catch (err) {
-      console.error("Error al registrar el paciente:", err);
-      setError("No se pudo guardar el paciente. Revisa que el backend esté corriendo e inténtalo de nuevo.");
-      setEnviando(false);
-    }
+  if (!duenoId) {
+    setError(
+      'Selecciona un tutor registrado antes de guardar (o créalo primero con "No hay Dueño").',
+    );
+    return;
   }
+
+  const datos = Object.fromEntries(
+    new FormData(e.currentTarget),
+  ) as Record<string, string>;
+
+  const nombreEspecie = especie.trim();
+  const nombreRaza = datos.mascotaRaza?.trim();
+  const color = datos.mascotaColor?.trim();
+  const motivo = datos.motivoIngreso?.trim();
+
+  if (!nombreEspecie) {
+    setError("Debes seleccionar una especie.");
+    return;
+  }
+
+  if (!nombreRaza) {
+    setError("Debes ingresar una raza.");
+    return;
+  }
+
+  setEnviando(true);
+  setError(null);
+
+  try {
+    // Busca ambos nombres en sus tablas independientes.
+    const referencias = await buscarReferenciasMascota(
+      nombreEspecie,
+      nombreRaza,
+    );
+
+    await crearPaciente({
+      nombre: datos.mascotaNombre,
+      especie: nombreEspecie,
+      raza: nombreRaza,
+      idEspecie: referencias.idEspecie,
+      idRaza: referencias.idRaza,
+      sexo,
+      fechaNacimiento: datos.mascotaFechaNacimiento || undefined,
+      pesoKg: Number(datos.mascotaPesoKg),
+      microchip: datos.mascotaMicrochip
+        ? Number(datos.mascotaMicrochip)
+        : undefined,
+      observaciones:
+        [motivo, color && `Color/señas: ${color}`]
+          .filter(Boolean)
+          .join(" — ") || undefined,
+      antecedentes: motivo || undefined,
+      alergias: alergias || undefined,
+      idDueno: Number(duenoId),
+    });
+
+    router.push("/dashboard/pacientes");
+  } catch (err) {
+    console.error("Error al registrar el paciente:", err);
+
+    setError(
+      err instanceof Error
+        ? err.message
+        : "No se pudo registrar el paciente.",
+    );
+  } finally {
+    setEnviando(false);
+  }
+}
 
   return (
     <div className="space-y-6">

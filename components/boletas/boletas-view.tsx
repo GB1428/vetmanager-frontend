@@ -153,10 +153,19 @@ export function BoletasView({
       setDialogAbierto(false);
       resetFormulario();
       setPagina(1);
-    } catch (err) {
-      console.error("Error al registrar la boleta:", err);
-      setError("No se pudo guardar la boleta. Revisa que el backend esté corriendo e inténtalo de nuevo.");
-    } finally {
+    }  catch (err) {
+  console.error("Error al registrar la boleta:", err);
+
+  if (err instanceof Error) {
+    console.error("Detalle del error:", err.message);
+  }
+
+  setError(
+    err instanceof Error
+      ? err.message
+      : "No se pudo guardar la boleta.",
+  );
+} finally {
       setGuardando(false);
     }
   }

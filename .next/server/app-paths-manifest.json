@@ -1,0 +1,8 @@
+{
+  "/(dashboard)/dashboard/agenda/page": "app/(dashboard)/dashboard/agenda/page.js",
+  "/(dashboard)/dashboard/duenos/page": "app/(dashboard)/dashboard/duenos/page.js",
+  "/(dashboard)/dashboard/vacunas/page": "app/(dashboard)/dashboard/vacunas/page.js",
+  "/(dashboard)/dashboard/boletas/page": "app/(dashboard)/dashboard/boletas/page.js",
+  "/(dashboard)/dashboard/pacientes/page": "app/(dashboard)/dashboard/pacientes/page.js",
+  "/(dashboard)/dashboard/reportes/page": "app/(dashboard)/dashboard/reportes/page.js"
+}
