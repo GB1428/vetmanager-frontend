@@ -33,11 +33,20 @@ export function EmergencyForm() {
       });
       setEnviado(true);
     } catch (err) {
-      console.error("Error al enviar la solicitud:", err);
-      setError("No se pudo enviar la solicitud. Intenta de nuevo en unos minutos.");
-    } finally {
-      setEnviando(false);
-    }
+  console.error("Error al enviar la solicitud:", err);
+
+  if (err instanceof Error) {
+    console.error("Detalle del backend:", err.message);
+  }
+
+  setError(
+    err instanceof Error
+      ? err.message
+      : "No se pudo enviar la solicitud.",
+  );
+} finally {
+  setEnviando(false);
+}
   }
 
   return (

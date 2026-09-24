@@ -41,7 +41,7 @@ function mapDueno(d: DuenoBackend): Dueno {
 }
 
 export async function listarDuenos(): Promise<Dueno[]> {
-  const data = await request<DuenoBackend[]>("/duenos?negocioId=1");
+  const data = await request<DuenoBackend[]>(`/duenos?negocioId=${NEGOCIO_ID}`);
   return data.map(mapDueno);
 }
 
@@ -52,7 +52,7 @@ export async function crearDueno(datos: {
   correo: string;
   direccion: string;
 }): Promise<Dueno> {
-  const creado = await request<DuenoBackend>("/duenos/1", {
+  const creado = await request<DuenoBackend>(`/duenos/${NEGOCIO_ID}`, {
     method: "POST",
     body: JSON.stringify({
       rut: datos.rut,
@@ -156,7 +156,7 @@ function mapPaciente(m: MascotaBackend): Paciente {
 }
 
 export async function listarPacientes(): Promise<Paciente[]> {
-  const data = await request<MascotaBackend[]>("/mascotas");
+  const data = await request<MascotaBackend[]>(`/mascotas?negocioId=${NEGOCIO_ID}`);
   return data.map(mapPaciente);
 }
 
@@ -235,7 +235,7 @@ function mapSolicitud(c: ContactoBackend): Solicitud {
 
 export async function listarSolicitudes(): Promise<Solicitud[]> {
   const data = await request<ContactoBackend[]>(
-    "/contacto-emergencia?negocioId=1",
+    `/contacto-emergencia?negocioId=${NEGOCIO_ID}`,
   );
   return data.map(mapSolicitud);
 }
@@ -249,7 +249,7 @@ export async function crearSolicitud(datos: {
   direccion: string;
   motivo: string;
 }): Promise<Solicitud> {
-  const creada = await request<ContactoBackend>("/contacto-emergencia", {
+  const creada = await request<ContactoBackend>(`/contacto-emergencia/negocio/${NEGOCIO_ID}`, {
     method: "POST",
     body: JSON.stringify({
       razon_consulta: datos.motivo,
@@ -261,6 +261,7 @@ export async function crearSolicitud(datos: {
         telefono: datos.telefono,
         correo: datos.correo,
         direccion: datos.direccion,
+        negocioId:{negocioId:NEGOCIO_ID}
       },
     }),
   });
@@ -344,7 +345,7 @@ function construirFechaHoraParaBackend(fechaISO: string, hora: string): string {
 }
 
 export async function listarCitas(): Promise<Cita[]> {
-  const data = await request<CitaBackend[]>("/citas?negocioId=1");
+  const data = await request<CitaBackend[]>(`/citas?negocioId=${NEGOCIO_ID}`);
   return data.map(mapCita);
 }
 
@@ -356,7 +357,7 @@ export async function crearCita(datos: {
   idDueno: number;
   estado?: string;
 }): Promise<Cita> {
-  const creada = await request<CitaBackend>("/citas/1", {
+  const creada = await request<CitaBackend>(`/citas/${NEGOCIO_ID}`, {
     method: "POST",
     body: JSON.stringify({
       fecha_hora: construirFechaHoraParaBackend(datos.fecha, datos.hora),
