@@ -1,23 +1,108 @@
 import { API_URL, NEGOCIO_ID } from "@/lib/config";
 import type { Paciente, Dueno, Solicitud, Cita, Boleta } from "@/lib/types";
+import { ApiError, extraerMensajeBackend, pistaParaError } from "@/lib/errors";
+import { logApiFallo, logApiOk, logInfo, logWarn } from "@/lib/logger";
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(options?.headers ?? {}),
-    },
-    cache: "no-store",
-  });
+logInfo(`API_URL = ${API_URL} | NEGOCIO_ID = ${NEGOCIO_ID}`);
 
-  if (!res.ok) {
-    const cuerpo = await res.text().catch(() => "");
-    throw new Error(cuerpo || `Error ${res.status} al llamar ${path}`);
+async function ejecutar(
+  path: string,
+  options?: RequestInit,
+): Promise<{ texto: string; status: number }> {
+  const method = (options?.method ?? "GET").toUpperCase();
+  const url = `${API_URL}${path}`;
+  const inicio = Date.now();
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...(options?.headers ?? {}),
+      },
+      cache: "no-store",
+    });
+  } catch (causa) {
+    const detalle = causa instanceof Error ? causa.message : String(causa);
+    const pista = pistaParaError(0, method);
+    const mensaje = "No se pudo conectar con el servidor. Revisa que el backend esté corriendo.";
+    logApiFallo({
+      metodo: method,
+      url,
+      status: 0,
+      ms: Date.now() - inicio,
+      mensaje,
+      respuesta: detalle,
+      pista,
+      body: options?.body,
+    });
+    throw new ApiError(mensaje, { status: 0, method, url, respuesta: detalle, pista });
   }
 
-  const texto = await res.text();
-  return texto ? (JSON.parse(texto) as T) : (undefined as T);
+  const ms = Date.now() - inicio;
+  const texto = await res.text().catch(() => "");
+
+  if (!res.ok) {
+    const mensaje = extraerMensajeBackend(texto) || `Error ${res.status} al llamar ${path}`;
+    const pista = pistaParaError(res.status, method);
+    logApiFallo({
+      metodo: method,
+      url,
+      status: res.status,
+      ms,
+      mensaje,
+      respuesta: texto,
+      pista,
+      body: options?.body,
+    });
+    throw new ApiError(mensaje, { status: res.status, method, url, respuesta: texto, pista });
+  }
+
+  logApiOk({ metodo: method, path, status: res.status, ms, body: options?.body });
+  return { texto, status: res.status };
+}
+
+async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const { texto, status } = await ejecutar(path, options);
+  if (!texto) return undefined as T;
+
+  try {
+    return JSON.parse(texto) as T;
+  } catch (err) {
+    const method = (options?.method ?? "GET").toUpperCase();
+    const pista =
+      "El backend respondió 2xx pero el cuerpo no es JSON. Revisa que el controlador devuelva el objeto y no un texto.";
+    logApiFallo({
+      metodo: method,
+      url: `${API_URL}${path}`,
+      status,
+      ms: 0,
+      mensaje: "La respuesta del backend no es JSON válido.",
+      respuesta: texto,
+      pista,
+    });
+    throw new ApiError("La respuesta del backend no tiene el formato esperado.", {
+      status,
+      method,
+      url: `${API_URL}${path}`,
+      respuesta: texto,
+      pista,
+    });
+  }
+}
+
+async function requestSinRespuesta(path: string, options?: RequestInit): Promise<void> {
+  await ejecutar(path, options);
+}
+
+function validarId(id: string | number, recurso: string): void {
+  const texto = String(id);
+  if (!texto || texto === "undefined" || texto === "null" || Number.isNaN(Number(texto))) {
+    const mensaje = `Id inválido al actualizar ${recurso}: "${texto}".`;
+    logWarn(mensaje);
+    throw new Error(mensaje);
+  }
 }
 
 type DuenoBackend = {
@@ -107,6 +192,10 @@ export async function buscarReferenciasMascota(
   );
 
   if (!especie) {
+    logWarn(
+      `Especie "${nombreEspecie}" no encontrada. Especies disponibles en la BD:`,
+      especies.map((e) => e.nombre_especie),
+    );
     throw new Error(
       `La especie "${nombreEspecie}" no existe en la base de datos.`,
     );
@@ -117,6 +206,10 @@ export async function buscarReferenciasMascota(
   );
 
   if (!raza) {
+    logWarn(
+      `Raza "${nombreRaza}" no encontrada. Razas disponibles en la BD:`,
+      razas.map((r) => r.nombre_raza),
+    );
     throw new Error(`La raza "${nombreRaza}" no existe en la base de datos.`);
   }
 
@@ -427,4 +520,84 @@ export async function crearBoleta(datos: {
     }),
   });
   return mapBoleta(creada);
+}
+
+export async function actualizarBoleta(
+  idBoleta: number,
+  cambios: { montoTotal?: number; estadoPago?: string; metodoPago?: string },
+): Promise<void> {
+  validarId(idBoleta, "la boleta");
+  await requestSinRespuesta(`/boletas/${idBoleta}`, {
+    method: "PATCH",
+    body: JSON.stringify(cambios),
+  });
+}
+
+export async function actualizarDueno(
+  id: string,
+  cambios: {
+    nombre?: string;
+    rut?: string;
+    telefono?: string;
+    correo?: string;
+    direccion?: string;
+  },
+): Promise<void> {
+  validarId(id, "el dueño");
+  const body: Record<string, unknown> = {};
+  if (cambios.nombre !== undefined) body.nombre_completo = cambios.nombre;
+  if (cambios.rut !== undefined) body.rut = cambios.rut;
+  if (cambios.telefono !== undefined) body.telefono = cambios.telefono;
+  if (cambios.correo !== undefined) body.correo = cambios.correo;
+  if (cambios.direccion !== undefined) body.direccion = cambios.direccion;
+
+  await requestSinRespuesta(`/duenos/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function actualizarPaciente(
+  id: string,
+  cambios: {
+    nombre?: string;
+    especie?: string;
+    raza?: string;
+    idEspecie?: number;
+    idRaza?: number;
+    sexo?: string;
+    fechaNacimiento?: string | null;
+    pesoKg?: number;
+    microchip?: number | null;
+    idDueno?: number;
+  },
+): Promise<void> {
+  validarId(id, "el paciente");
+  const body: Record<string, unknown> = {};
+  if (cambios.nombre !== undefined) body.nombre = cambios.nombre;
+  if (cambios.especie !== undefined) body.especie = cambios.especie;
+  if (cambios.raza !== undefined) body.raza = cambios.raza;
+  if (cambios.idEspecie !== undefined) body.id_especie = { id_especie: cambios.idEspecie };
+  if (cambios.idRaza !== undefined) body.id_raza = { id_raza: cambios.idRaza };
+  if (cambios.sexo !== undefined) body.sexo = cambios.sexo;
+  if (cambios.fechaNacimiento !== undefined) body.fecha_nacimiento = cambios.fechaNacimiento;
+  if (cambios.pesoKg !== undefined) body.peso = cambios.pesoKg;
+  if (cambios.microchip !== undefined) body.microchip = cambios.microchip;
+  if (cambios.idDueno !== undefined) body.id_dueno = { id_dueno: cambios.idDueno };
+
+  await requestSinRespuesta(`/mascotas/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function actualizarCita(
+  id: string,
+  cambios: { estado?: string; motivo?: string },
+): Promise<void> {
+  validarId(id, "la cita");
+  await requestSinRespuesta(`/citas/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(cambios),
+  });
 }

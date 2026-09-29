@@ -4,17 +4,26 @@ import { PawPrint, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PacientesTable } from "@/components/pacientes/pacientes-table";
-import { listarPacientes } from "@/lib/api";
+import { listarPacientes, listarDuenos } from "@/lib/api";
 
 export default async function PacientesPage() {
   let pacientes: Awaited<ReturnType<typeof listarPacientes>> = [];
+  let duenos: Awaited<ReturnType<typeof listarDuenos>> = [];
   let error = false;
 
-  try {
-    pacientes = await listarPacientes();
-  } catch (err) {
-    console.error("Error al cargar pacientes:", err);
+  const [resPacientes, resDuenos] = await Promise.allSettled([listarPacientes(), listarDuenos()]);
+
+  if (resPacientes.status === "fulfilled") {
+    pacientes = resPacientes.value;
+  } else {
+    console.error("Error al cargar pacientes:", resPacientes.reason);
     error = true;
+  }
+
+  if (resDuenos.status === "fulfilled") {
+    duenos = resDuenos.value;
+  } else {
+    console.error("Error al cargar los dueños para la edición de pacientes:", resDuenos.reason);
   }
 
   return (
@@ -47,7 +56,7 @@ export default async function PacientesPage() {
           actionHref="/dashboard/pacientes/nuevo"
         />
       ) : (
-        <PacientesTable pacientes={pacientes} />
+        <PacientesTable pacientes={pacientes} duenos={duenos} />
       )}
     </div>
   );

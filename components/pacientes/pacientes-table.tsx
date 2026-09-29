@@ -1,8 +1,31 @@
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import type { Paciente } from "@/lib/types";
+"use client";
 
-export function PacientesTable({ pacientes }: { pacientes: Paciente[] }) {
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Pencil } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { EditarPacienteDialog } from "@/components/pacientes/editar-paciente-dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import type { Dueno, Paciente } from "@/lib/types";
+
+export function PacientesTable({
+  pacientes: pacientesIniciales,
+  duenos = [],
+}: {
+  pacientes: Paciente[];
+  duenos?: Dueno[];
+}) {
+  const router = useRouter();
+  const [pacientes, setPacientes] = useState<Paciente[]>(pacientesIniciales);
+  const [editando, setEditando] = useState<Paciente | null>(null);
+
+  useEffect(() => {
+    setPacientes(pacientesIniciales);
+  }, [pacientesIniciales]);
+
   return (
+    <>
     <Table>
       <TableHeader>
         <TableRow>
@@ -11,6 +34,7 @@ export function PacientesTable({ pacientes }: { pacientes: Paciente[] }) {
           <TableHead>Sexo</TableHead>
           <TableHead>Dueño</TableHead>
           <TableHead>Microchip</TableHead>
+          <TableHead className="text-right">Acciones</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -23,9 +47,36 @@ export function PacientesTable({ pacientes }: { pacientes: Paciente[] }) {
             <TableCell>{p.sexo}</TableCell>
             <TableCell>{p.duenoNombre}</TableCell>
             <TableCell>{p.microchip ?? "—"}</TableCell>
+            <TableCell className="text-right">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="rounded-full"
+                onClick={() => setEditando(p)}
+                aria-label={`Editar a ${p.nombre}`}
+              >
+                <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                Editar
+              </Button>
+            </TableCell>
           </TableRow>
         ))}
       </TableBody>
     </Table>
+
+    {editando && (
+      <EditarPacienteDialog
+        key={editando.id}
+        paciente={editando}
+        duenos={duenos}
+        onClose={() => setEditando(null)}
+        onGuardado={(actualizado) => {
+          setPacientes((prev) => prev.map((p) => (p.id === actualizado.id ? actualizado : p)));
+          router.refresh();
+        }}
+      />
+    )}
+    </>
   );
 }

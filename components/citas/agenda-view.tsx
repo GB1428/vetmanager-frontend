@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ChevronLeft,
   ChevronRight,
@@ -12,10 +13,12 @@ import {
   User,
   AlignLeft,
   CalendarX,
+  Pencil,
 } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { EditarCitaDialog } from "@/components/citas/editar-cita-dialog";
 import { cn } from "@/lib/utils";
 import type { Cita } from "@/lib/types";
 
@@ -40,6 +43,14 @@ function toKey(anio: number, mes: number, dia: number) {
 }
 
 export function AgendaView({ citasIniciales }: { citasIniciales: Cita[] }) {
+  const router = useRouter();
+  const [citas, setCitas] = useState<Cita[]>(citasIniciales);
+  const [citaEditando, setCitaEditando] = useState<Cita | null>(null);
+
+  useEffect(() => {
+    setCitas(citasIniciales);
+  }, [citasIniciales]);
+
   const hoy = new Date();
   const [vista, setVista] = useState({ anio: hoy.getFullYear(), mes: hoy.getMonth() });
   const [modo, setModo] = useState<"mes" | "semana">("mes");
@@ -47,7 +58,7 @@ export function AgendaView({ citasIniciales }: { citasIniciales: Cita[] }) {
 
   const citasPorDia = useMemo(() => {
     const mapa = new Map<string, Cita[]>();
-    for (const cita of citasIniciales) {
+    for (const cita of citas) {
       const lista = mapa.get(cita.fecha) ?? [];
       lista.push(cita);
       mapa.set(cita.fecha, lista);
@@ -56,7 +67,7 @@ export function AgendaView({ citasIniciales }: { citasIniciales: Cita[] }) {
       lista.sort((a, b) => a.hora.localeCompare(b.hora));
     }
     return mapa;
-  }, [citasIniciales]);
+  }, [citas]);
 
   const primerDiaSemana = (new Date(vista.anio, vista.mes, 1).getDay() + 6) % 7;
   const diasEnMes = new Date(vista.anio, vista.mes + 1, 0).getDate();
@@ -283,15 +294,47 @@ export function AgendaView({ citasIniciales }: { citasIniciales: Cita[] }) {
                         <span>{cita.motivo}</span>
                       </div>
                     </div>
-                    <span className="w-fit shrink-0 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-                      {cita.estado}
-                    </span>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span
+                        className={cn(
+                          "w-fit rounded-full px-3 py-1 text-xs font-medium",
+                          cita.estado.toLowerCase() === "cancelada"
+                            ? "bg-destructive/10 text-destructive"
+                            : "bg-primary/10 text-primary"
+                        )}
+                      >
+                        {cita.estado}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="rounded-full"
+                        onClick={() => setCitaEditando(cita)}
+                        aria-label={`Editar cita de ${cita.mascotaNombre}`}
+                      >
+                        <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                        Editar
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
             )}
           </CardContent>
         </Card>
+      )}
+
+      {citaEditando && (
+        <EditarCitaDialog
+          key={citaEditando.id}
+          cita={citaEditando}
+          onClose={() => setCitaEditando(null)}
+          onGuardada={(actualizada) => {
+            setCitas((prev) => prev.map((c) => (c.id === actualizada.id ? actualizada : c)));
+            router.refresh();
+          }}
+        />
       )}
     </div>
   );

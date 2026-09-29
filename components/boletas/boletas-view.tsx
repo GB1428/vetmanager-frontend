@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Plus,
   Download,
@@ -12,6 +13,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Receipt,
+  Pencil,
 } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -28,6 +30,9 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmptyState } from "@/components/shared/empty-state";
+import { SelectOpciones } from "@/components/shared/select-opciones";
+import { EditarBoletaDialog } from "@/components/boletas/editar-boleta-dialog";
+import { ESTADOS_PAGO, ESTADO_PAGO_INICIAL, METODOS_PAGO } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { crearBoleta } from "@/lib/api";
 import type { Boleta, Dueno, Cita } from "@/lib/types";
@@ -59,7 +64,13 @@ export function BoletasView({
   duenos: Dueno[];
   citas: Cita[];
 }) {
+  const router = useRouter();
   const [boletas, setBoletas] = useState<Boleta[]>(boletasIniciales);
+  const [boletaEditando, setBoletaEditando] = useState<Boleta | null>(null);
+
+  useEffect(() => {
+    setBoletas(boletasIniciales);
+  }, [boletasIniciales]);
 
   const [busqueda, setBusqueda] = useState("");
   const [estadoFiltro, setEstadoFiltro] = useState<"todos" | "pagado" | "pendiente">("todos");
@@ -72,7 +83,7 @@ export function BoletasView({
   const [duenoId, setDuenoId] = useState("");
   const [citaId, setCitaId] = useState("");
   const [montoTotal, setMontoTotal] = useState("");
-  const [estadoPago, setEstadoPago] = useState("");
+  const [estadoPago, setEstadoPago] = useState(ESTADO_PAGO_INICIAL);
   const [metodoPago, setMetodoPago] = useState("");
 
   const citasDelDueno = useMemo(
@@ -110,7 +121,7 @@ export function BoletasView({
     setDuenoId("");
     setCitaId("");
     setMontoTotal("");
-    setEstadoPago("");
+    setEstadoPago(ESTADO_PAGO_INICIAL);
     setMetodoPago("");
     setError(null);
   }
@@ -278,12 +289,13 @@ export function BoletasView({
                     <TableHead>Monto</TableHead>
                     <TableHead>Estado de Pago</TableHead>
                     <TableHead>Método</TableHead>
+                    <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {visibles.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
+                      <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
                         No se encontraron boletas con esos filtros.
                       </TableCell>
                     </TableRow>
@@ -315,6 +327,19 @@ export function BoletasView({
                           </span>
                         </TableCell>
                         <TableCell>{b.metodoPago ?? "—"}</TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="rounded-full"
+                            onClick={() => setBoletaEditando(b)}
+                            aria-label={`Editar boleta ${b.id}`}
+                          >
+                            <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                            Editar
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))
                   )}
@@ -427,20 +452,22 @@ export function BoletasView({
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="boleta-estado">Estado de Pago</Label>
-                <Input
+                <SelectOpciones
                   id="boleta-estado"
-                  placeholder="Ej: PAGADO"
                   value={estadoPago}
-                  onChange={(e) => setEstadoPago(e.target.value)}
+                  onValueChange={setEstadoPago}
+                  opciones={ESTADOS_PAGO}
+                  placeholder="Selecciona un estado"
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="boleta-metodo">Método de Pago</Label>
-                <Input
+                <SelectOpciones
                   id="boleta-metodo"
-                  placeholder="Ej: EFECTIVO"
                   value={metodoPago}
-                  onChange={(e) => setMetodoPago(e.target.value)}
+                  onValueChange={setMetodoPago}
+                  opciones={METODOS_PAGO}
+                  placeholder="Selecciona un método"
                 />
               </div>
             </div>
@@ -454,6 +481,18 @@ export function BoletasView({
           </form>
         </DialogContent>
       </Dialog>
+
+      {boletaEditando && (
+        <EditarBoletaDialog
+          key={boletaEditando.idBoleta}
+          boleta={boletaEditando}
+          onClose={() => setBoletaEditando(null)}
+          onGuardada={(actualizada) => {
+            setBoletas((prev) => prev.map((b) => (b.idBoleta === actualizada.idBoleta ? actualizada : b)));
+            router.refresh();
+          }}
+        />
+      )}
     </div>
   );
 }
