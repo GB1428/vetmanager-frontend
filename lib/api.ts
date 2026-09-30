@@ -527,9 +527,14 @@ export async function actualizarBoleta(
   cambios: { montoTotal?: number; estadoPago?: string; metodoPago?: string },
 ): Promise<void> {
   validarId(idBoleta, "la boleta");
+  const body: Record<string, unknown> = {};
+  if (cambios.montoTotal !== undefined) body.montoTotal = cambios.montoTotal;
+  if (cambios.estadoPago !== undefined) body.estadoPago = cambios.estadoPago;
+  if (cambios.metodoPago !== undefined) body.metodoPago = cambios.metodoPago;
+
   await requestSinRespuesta(`/boletas/${idBoleta}`, {
     method: "PATCH",
-    body: JSON.stringify(cambios),
+    body: JSON.stringify(body),
   });
 }
 

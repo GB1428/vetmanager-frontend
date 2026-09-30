@@ -1,16 +1,17 @@
 export type Opcion = { value: string; label: string };
 
 export const ESTADOS_PAGO: Opcion[] = [
-  { value: "PENDIENTE", label: "Pendiente" },
-  { value: "PAGADO", label: "Pagado" },
+  { value: "Pendiente", label: "Pendiente" },
+  { value: "Pagado", label: "Pagado" },
+  { value: "Anulado", label: "Anulado" }
 ];
 
-export const ESTADO_PAGO_INICIAL = "PENDIENTE";
+export const ESTADO_PAGO_INICIAL = "Pendiente";
 
 export const METODOS_PAGO: Opcion[] = [
-  { value: "EFECTIVO", label: "Efectivo" },
-  { value: "TARJETA", label: "Tarjeta" },
-  { value: "TRANSFERENCIA", label: "Transferencia" },
+  { value: "Efectivo", label: "Efectivo" },
+  { value: "Tarjeta", label: "Tarjeta" },
+  { value: "Transferencia", label: "Transferencia" },
 ];
 
 export const ESTADOS_CITA: Opcion[] = [
