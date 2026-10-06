@@ -82,7 +82,7 @@ export function DuenoDetalle({ dueno, mascotas }: { dueno: Dueno; mascotas: Paci
                     </div>
                     <div className="rounded-2xl bg-secondary/50 px-3 py-2">
                       <p className="text-xs text-muted-foreground">Sexo</p>
-                      <p className="truncate text-sm font-semibold">{etiquetaSexo(m.sexo)}</p>
+                      <p className="text-sm font-semibold leading-tight">{etiquetaSexo(m.sexo)}</p>
                     </div>
                   </div>
                 </Link>
