@@ -12,7 +12,6 @@ import {
   PawPrint,
   User,
   AlignLeft,
-  CalendarX,
   Pencil,
 } from "lucide-react";
 
@@ -53,7 +52,6 @@ export function AgendaView({ citasIniciales }: { citasIniciales: Cita[] }) {
 
   const hoy = new Date();
   const [vista, setVista] = useState({ anio: hoy.getFullYear(), mes: hoy.getMonth() });
-  const [modo, setModo] = useState<"mes" | "semana">("mes");
   const [seleccionado, setSeleccionado] = useState<string | null>(null);
 
   const citasPorDia = useMemo(() => {
@@ -112,28 +110,6 @@ export function AgendaView({ citasIniciales }: { citasIniciales: Cita[] }) {
           <p className="mt-1 text-sm text-muted-foreground">Revisa y gestiona las citas programadas.</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <div className="inline-flex rounded-full bg-secondary/60 p-1">
-            <button
-              type="button"
-              onClick={() => setModo("mes")}
-              className={cn(
-                "rounded-full px-4 py-1.5 text-sm font-medium transition-colors",
-                modo === "mes" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
-              )}
-            >
-              Mes
-            </button>
-            <button
-              type="button"
-              onClick={() => setModo("semana")}
-              className={cn(
-                "rounded-full px-4 py-1.5 text-sm font-medium transition-colors",
-                modo === "semana" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
-              )}
-            >
-              Semana
-            </button>
-          </div>
           <Button variant="outline" className="rounded-full border-primary/30 text-primary" disabled>
             <BellPlus className="mr-1.5 h-4 w-4" />
             Agregar Recordatorio
@@ -147,17 +123,7 @@ export function AgendaView({ citasIniciales }: { citasIniciales: Cita[] }) {
         </div>
       </div>
 
-      {modo === "semana" ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center gap-2 py-16 text-center">
-            <CalendarX className="h-8 w-8 text-muted-foreground" />
-            <p className="text-sm font-medium">La vista semanal está en camino</p>
-            <p className="max-w-sm text-xs text-muted-foreground">
-              Por ahora usa la vista de Mes para revisar y agendar las citas.
-            </p>
-          </CardContent>
-        </Card>
-      ) : (
+      {(
         <Card className="overflow-hidden">
           <div className="flex items-center justify-between border-b px-6 py-4">
             <button
