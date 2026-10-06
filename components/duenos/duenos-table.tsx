@@ -1,13 +1,47 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Pencil } from "lucide-react";
+import { IdCard, Mail, MapPin, Pencil, Phone } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { EditarDuenoDialog } from "@/components/duenos/editar-dueno-dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { Dueno } from "@/lib/types";
+
+export function iniciales(nombre: string): string {
+  return (
+    nombre
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((p) => p[0]?.toUpperCase())
+      .join("") || "—"
+  );
+}
+
+export function DatosContacto({ dueno }: { dueno: Dueno }) {
+  return (
+    <div className="space-y-3 text-sm">
+      <p className="flex items-center gap-3">
+        <IdCard className="h-4 w-4 shrink-0 text-primary" />
+        RUT: {dueno.rut}
+      </p>
+      <p className="flex items-center gap-3">
+        <Phone className="h-4 w-4 shrink-0 text-primary" />
+        {dueno.telefono || "—"}
+      </p>
+      <p className="flex items-center gap-3">
+        <Mail className="h-4 w-4 shrink-0 text-primary" />
+        <span className="break-all">{dueno.correo || "—"}</span>
+      </p>
+      <p className="flex items-start gap-3">
+        <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+        {dueno.direccion || "—"}
+      </p>
+    </div>
+  );
+}
 
 export function DuenosTable({ duenos: duenosIniciales }: { duenos: Dueno[] }) {
   const router = useRouter();
@@ -20,26 +54,30 @@ export function DuenosTable({ duenos: duenosIniciales }: { duenos: Dueno[] }) {
 
   return (
     <>
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Nombre</TableHead>
-          <TableHead>RUT</TableHead>
-          <TableHead>Teléfono</TableHead>
-          <TableHead>Correo</TableHead>
-          <TableHead>Dirección</TableHead>
-          <TableHead className="text-right">Acciones</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {duenos.map((d) => (
-          <TableRow key={d.id}>
-            <TableCell className="font-medium">{d.nombre}</TableCell>
-            <TableCell>{d.rut}</TableCell>
-            <TableCell>{d.telefono}</TableCell>
-            <TableCell>{d.correo ?? "—"}</TableCell>
-            <TableCell>{d.direccion ?? "—"}</TableCell>
-            <TableCell className="text-right">
+          <div
+            key={d.id}
+            className="relative flex flex-col gap-4 rounded-3xl border bg-card p-5 shadow-sm transition-shadow hover:shadow-md"
+          >
+            <Link
+              href={`/dashboard/duenos/${d.id}`}
+              aria-label={`Ver ficha de ${d.nombre}`}
+              className="absolute inset-0 z-0 rounded-3xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+
+            <div className="flex items-center gap-3">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+                {iniciales(d.nombre)}
+              </span>
+              <h2 className="text-xl font-semibold leading-tight">{d.nombre}</h2>
+            </div>
+
+            <div className="border-t pt-4">
+              <DatosContacto dueno={d} />
+            </div>
+
+            <div className="relative z-10 flex justify-end">
               <Button
                 type="button"
                 variant="outline"
@@ -51,23 +89,22 @@ export function DuenosTable({ duenos: duenosIniciales }: { duenos: Dueno[] }) {
                 <Pencil className="mr-1.5 h-3.5 w-3.5" />
                 Editar
               </Button>
-            </TableCell>
-          </TableRow>
+            </div>
+          </div>
         ))}
-      </TableBody>
-    </Table>
+      </div>
 
-    {editando && (
-      <EditarDuenoDialog
-        key={editando.id}
-        dueno={editando}
-        onClose={() => setEditando(null)}
-        onGuardado={(actualizado) => {
-          setDuenos((prev) => prev.map((d) => (d.id === actualizado.id ? actualizado : d)));
-          router.refresh();
-        }}
-      />
-    )}
+      {editando && (
+        <EditarDuenoDialog
+          key={editando.id}
+          dueno={editando}
+          onClose={() => setEditando(null)}
+          onGuardado={(actualizado) => {
+            setDuenos((prev) => prev.map((d) => (d.id === actualizado.id ? actualizado : d)));
+            router.refresh();
+          }}
+        />
+      )}
     </>
   );
 }

@@ -9,6 +9,12 @@ export type Paciente = {
   microchip?: string;
   duenoNombre: string;
   duenoId?: string;
+  duenoRut?: string;
+  duenoTelefono?: string;
+  duenoCorreo?: string;
+  duenoDireccion?: string;
+  alergias?: string;
+  antecedentes?: string;
 };
 
 export type Dueno = {

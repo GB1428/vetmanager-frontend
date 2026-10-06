@@ -25,7 +25,6 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { OptionRadioCard } from "@/components/shared/option-radio-card";
-import { PhotoUpload } from "@/components/pacientes/photo-upload";
 import { crearPaciente, listarDuenos } from "@/lib/api";
 import type { Dueno } from "@/lib/types";
 
@@ -234,13 +233,7 @@ export function NuevoPacienteForm() {
             <p className="pl-10 text-sm text-muted-foreground">Información biológica y clínica básica del animal.</p>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
-              <div className="space-y-2">
-                <PhotoUpload />
-                <p className="text-center text-xs text-muted-foreground">Opcional</p>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="mascota-nombre">Nombre de la Mascota *</Label>
                   <Input id="mascota-nombre" name="mascotaNombre" placeholder="Ej: Thor, Kira, Rocky" required />
@@ -305,7 +298,6 @@ export function NuevoPacienteForm() {
                     placeholder="Ej: café dorado con mancha blanca en el pecho"
                   />
                 </div>
-              </div>
             </div>
           </CardContent>
         </Card>

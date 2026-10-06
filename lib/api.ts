@@ -230,6 +230,8 @@ type MascotaBackend = {
   fecha_nacimiento: string | null;
   peso: number;
   microchip: number | null;
+  alergias?: string | null;
+  antecedentes?: string | null;
   dueno?: DuenoBackend;
 };
 
@@ -245,7 +247,18 @@ function mapPaciente(m: MascotaBackend): Paciente {
     microchip: m.microchip != null ? String(m.microchip) : undefined,
     duenoNombre: m.dueno?.nombre_completo ?? "—",
     duenoId: m.dueno?.id_dueno != null ? String(m.dueno.id_dueno) : undefined,
+    duenoRut: m.dueno?.rut,
+    duenoTelefono: m.dueno?.telefono,
+    duenoCorreo: m.dueno?.correo,
+    duenoDireccion: m.dueno?.direccion,
+    alergias: m.alergias ?? undefined,
+    antecedentes: m.antecedentes ?? undefined,
   };
+}
+
+export async function obtenerPaciente(id: string): Promise<Paciente> {
+  const data = await request<MascotaBackend>(`/mascotas/${id}?negocioId=${NEGOCIO_ID}`);
+  return mapPaciente(data);
 }
 
 export async function listarPacientes(): Promise<Paciente[]> {
