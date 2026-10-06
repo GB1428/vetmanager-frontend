@@ -451,7 +451,7 @@ function construirFechaHoraParaBackend(fechaISO: string, hora: string): string {
 }
 
 export async function listarCitas(): Promise<Cita[]> {
-  const data = await request<CitaBackend[]>(`/citas?negocioId=${NEGOCIO_ID}`);
+  const data = await request<CitaBackend[]>(`/citas/citas?negocioId=${NEGOCIO_ID}`);
   return data.map(mapCita);
 }
 
@@ -510,7 +510,7 @@ function mapBoleta(b: BoletaBackend): Boleta {
 }
 
 export async function listarBoletas(): Promise<Boleta[]> {
-  const data = await request<BoletaBackend[]>("/boletas");
+  const data = await request<BoletaBackend[]>(`/boletas?negocioId=${NEGOCIO_ID}`);
   return data.map(mapBoleta);
 }
 
