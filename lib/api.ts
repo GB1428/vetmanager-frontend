@@ -1,10 +1,12 @@
 import { API_URL, NEGOCIO_ID } from "@/lib/config";
-import type { Paciente, Dueno, Solicitud, Cita, Boleta } from "@/lib/types";
+import type { Paciente, Dueno, Solicitud, Cita, Boleta, Vacuna, RegistroVacuna } from "@/lib/types";
 import { ApiError, extraerMensajeBackend, pistaParaError } from "@/lib/errors";
 import { logApiFallo, logApiOk, logInfo, logWarn } from "@/lib/logger";
+import { aFechaBackend } from "@/lib/fechas";
 
 logInfo(`API_URL = ${API_URL} | NEGOCIO_ID = ${NEGOCIO_ID}`);
 
+// base de las llamadas al back (fetch + errores + logs)
 async function ejecutar(
   path: string,
   options?: RequestInit,
@@ -63,6 +65,7 @@ async function ejecutar(
   return { texto, status: res.status };
 }
 
+// igual pero parsea el json
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const { texto, status } = await ejecutar(path, options);
   if (!texto) return undefined as T;
@@ -92,10 +95,12 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   }
 }
 
+// para los patch/delete que no devuelven nada util
 async function requestSinRespuesta(path: string, options?: RequestInit): Promise<void> {
   await ejecutar(path, options);
 }
 
+// evita mandar /undefined al back
 function validarId(id: string | number, recurso: string): void {
   const texto = String(id);
   if (!texto || texto === "undefined" || texto === "null" || Number.isNaN(Number(texto))) {
@@ -105,6 +110,7 @@ function validarId(id: string | number, recurso: string): void {
   }
 }
 
+// ---------- duenos ----------
 type DuenoBackend = {
   id_dueno: number;
   rut: string;
@@ -151,6 +157,7 @@ export async function crearDueno(datos: {
   return mapDueno(creado);
 }
 
+// ---------- especies y razas (se usan al crear/editar mascotas) ----------
 type EspecieBackend = {
   id_especie: number;
   nombre_especie: string;
@@ -169,6 +176,7 @@ export async function listarRazas(): Promise<RazaBackend[]> {
   return request<RazaBackend[]>("/razas");
 }
 
+// saca tildes y mayusculas para comparar nombres
 function normalizarTexto(valor: string): string {
   return valor
     .trim()
@@ -219,6 +227,7 @@ export async function buscarReferenciasMascota(
   };
 }
 
+// ---------- pacientes (mascotas) ----------
 type MascotaBackend = {
   id_mascota: number;
   nombre: string;
@@ -313,6 +322,7 @@ export async function crearPaciente(datos: {
   return mapPaciente(creado);
 }
 
+// ---------- solicitudes (contacto emergencia) ----------
 type ContactoBackend = {
   id_contacto: number;
   razon_consulta: string;
@@ -388,6 +398,7 @@ export async function actualizarEstadoSolicitud(
   return mapSolicitud(actualizada);
 }
 
+// ---------- citas ----------
 type CitaBackend = {
   id_cita: number;
   fecha_hora: string;
@@ -430,6 +441,7 @@ function mapCita(c: CitaBackend): Cita {
   };
 }
 
+// parche de horas, el back guarda las fechas con desfase
 function calcularInstanteUtcParaHorarioChile(
   fechaISO: string,
   hora: string,
@@ -480,6 +492,7 @@ id_dueno: {
   return mapCita(creada);
 }
 
+// ---------- boletas ----------
 type BoletaBackend = {
   idBoleta: number;
   idNegocio: number;
@@ -551,6 +564,7 @@ export async function actualizarBoleta(
   });
 }
 
+// ---------- updates sueltos ----------
 export async function actualizarDueno(
   id: string,
   cambios: {
@@ -617,5 +631,121 @@ export async function actualizarCita(
   await requestSinRespuesta(`/citas/${id}`, {
     method: "PATCH",
     body: JSON.stringify(cambios),
+  });
+}
+
+// ---------- aqui es vacunas ----------
+
+// catalogo de vacunas (GET /vacunas)
+type VacunaBackend = {
+  id_vacuna: number;
+  nombre_vacuna: string;
+  descripcion: string;
+  especy?: { id_especie: number; nombre_especie: string };
+};
+
+// un registro del historial (GET /historial-vacunas), ojo que la fecha viene con tilde
+type HistorialVacunaBackend = {
+  id_historial: number;
+  observaciones: string;
+  "fecha_aplicación": string;
+  proxima_dosis: string;
+  lote: string;
+  vacuna?: VacunaBackend;
+};
+
+function mapVacuna(v: VacunaBackend): Vacuna {
+  return {
+    id: String(v.id_vacuna),
+    nombre: v.nombre_vacuna,
+    descripcion: v.descripcion,
+    especie: v.especy?.nombre_especie,
+  };
+}
+
+function mapRegistroVacuna(h: HistorialVacunaBackend): RegistroVacuna {
+  return {
+    id: String(h.id_historial),
+    vacunaId: h.vacuna ? String(h.vacuna.id_vacuna) : "",
+    vacunaNombre: h.vacuna?.nombre_vacuna ?? "Vacuna",
+    vacunaDescripcion: h.vacuna?.descripcion ?? "",
+    lote: h.lote,
+    fechaAplicacion: h["fecha_aplicación"],
+    proximaDosis: h.proxima_dosis,
+    observaciones: h.observaciones,
+  };
+}
+
+export async function listarVacunas(): Promise<Vacuna[]> {
+  const data = await request<VacunaBackend[]>("/vacunas");
+  return data.map(mapVacuna);
+}
+
+export async function crearVacuna(datos: {
+  nombre: string;
+  descripcion: string;
+  idEspecie: number;
+}): Promise<Vacuna> {
+  const creada = await request<VacunaBackend>("/vacunas", {
+    method: "POST",
+    body: JSON.stringify({
+      nombre_vacuna: datos.nombre,
+      descripcion: datos.descripcion,
+      id_especie: { id_especie: datos.idEspecie },
+    }),
+  });
+  return mapVacuna(creada);
+}
+
+// el back tira 404 cuando la mascota no tiene nada, aqui eso es lista vacia
+export async function listarHistorialVacunas(idMascota: string): Promise<RegistroVacuna[]> {
+  try {
+    const data = await request<HistorialVacunaBackend[]>(
+      `/historial-vacunas?negocioId=${NEGOCIO_ID}&id_mascota=${idMascota}`,
+    );
+    return data
+      .map(mapRegistroVacuna)
+      .sort((a, b) => b.fechaAplicacion.localeCompare(a.fechaAplicacion));
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404 && err.message.includes("No existe historial")) {
+      return [];
+    }
+    throw err;
+  }
+}
+
+// la fecha de aplicacion la pone el back sola (hoy), no se manda
+export async function crearRegistroVacuna(datos: {
+  idMascota: number;
+  idVacuna: number;
+  lote: string;
+  proximaDosis: string;
+  observaciones: string;
+}): Promise<void> {
+  await requestSinRespuesta("/historial-vacunas", {
+    method: "POST",
+    body: JSON.stringify({
+      id_mascota: { id_mascota: datos.idMascota },
+      id_vacuna: { id_vacuna: datos.idVacuna },
+      lote: datos.lote,
+      proxima_dosis: aFechaBackend(datos.proximaDosis),
+      observaciones: datos.observaciones,
+    }),
+  });
+}
+
+// el dto de update del back pide proxima_dosis y observaciones siempre, por eso van los tres
+export async function actualizarRegistroVacuna(
+  id: string,
+  datos: { lote: string; proximaDosis: string; observaciones: string },
+): Promise<void> {
+  validarId(id, "el registro de vacuna");
+  await requestSinRespuesta(`/historial-vacunas/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      lote: datos.lote,
+      proxima_dosis: aFechaBackend(datos.proximaDosis),
+      observaciones: datos.observaciones,
+    }),
   });
 }

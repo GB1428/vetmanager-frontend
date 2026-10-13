@@ -63,3 +63,21 @@ export type Boleta = {
   metodoPago?: string;
   fecha?: string;
 };
+
+export type Vacuna = {
+  id: string;
+  nombre: string;
+  descripcion: string;
+  especie?: string;
+};
+
+export type RegistroVacuna = {
+  id: string;
+  vacunaId: string;
+  vacunaNombre: string;
+  vacunaDescripcion: string;
+  lote: string;
+  fechaAplicacion: string;
+  proximaDosis: string;
+  observaciones: string;
+};

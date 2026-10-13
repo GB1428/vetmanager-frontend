@@ -48,3 +48,5 @@ export function resolverOpcion(opciones: Opcion[], valor?: string | null): strin
   const encontrada = opciones.find((o) => normalizar(o.value) === normalizar(valor));
   return encontrada ? encontrada.value : valor;
 }
+
+export const OBSERVACION_VACIA = "Sin observaciones";

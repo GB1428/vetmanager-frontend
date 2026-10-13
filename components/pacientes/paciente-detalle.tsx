@@ -7,29 +7,16 @@ import { CalendarCheck, CalendarPlus, Mail, MapPin, PawPrint, Pencil, Phone, Sca
 
 import { Button } from "@/components/ui/button";
 import { EditarPacienteDialog } from "@/components/pacientes/editar-paciente-dialog";
+import { VacunasPaciente } from "@/components/vacunas/vacunas-paciente";
+import { calcularEdad } from "@/lib/fechas";
+import { cn } from "@/lib/utils";
 import { SEXOS, resolverOpcion } from "@/lib/constants";
-import type { Dueno, Paciente } from "@/lib/types";
+import type { Dueno, Paciente, RegistroVacuna } from "@/lib/types";
 
 function etiquetaSexo(valor?: string): string {
   if (!valor) return "";
   const v = resolverOpcion(SEXOS, valor);
   return SEXOS.find((o) => o.value === v)?.label ?? valor;
-}
-
-function calcularEdad(fechaNacimiento?: string): string | null {
-  if (!fechaNacimiento) return null;
-  const nac = new Date(fechaNacimiento);
-  if (Number.isNaN(nac.getTime())) return null;
-  const hoy = new Date();
-  let meses = (hoy.getFullYear() - nac.getFullYear()) * 12 + (hoy.getMonth() - nac.getMonth());
-  if (hoy.getDate() < nac.getDate()) meses -= 1;
-  if (meses < 0) return null;
-  const anios = Math.floor(meses / 12);
-  const resto = meses % 12;
-  const partes: string[] = [];
-  if (anios > 0) partes.push(`${anios} ${anios === 1 ? "año" : "años"}`);
-  if (resto > 0 || anios === 0) partes.push(`${resto} ${resto === 1 ? "mes" : "meses"}`);
-  return partes.join(" y ");
 }
 
 function formatearFecha(iso?: string): string | null {
@@ -57,14 +44,17 @@ export function PacienteDetalle({
   duenos,
   otrosPacientes,
   ultimaVisita,
+  vacunas,
 }: {
   paciente: Paciente;
   duenos: Dueno[];
   otrosPacientes: Paciente[];
   ultimaVisita?: string;
+  vacunas: RegistroVacuna[];
 }) {
   const router = useRouter();
   const [editando, setEditando] = useState(false);
+  const [pestana, setPestana] = useState<"resumen" | "vacunas">("resumen");
 
   const edad = calcularEdad(paciente.fechaNacimiento);
   const nacimiento = formatearFecha(paciente.fechaNacimiento);
@@ -85,7 +75,6 @@ export function PacienteDetalle({
 
   return (
     <div className="space-y-5">
-      {/* Encabezado */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border bg-card px-6 py-4 shadow-sm">
         <div>
           <nav className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -113,7 +102,6 @@ export function PacienteDetalle({
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
-        {/* Datos del paciente + alergias */}
         <div className="rounded-3xl border bg-card p-6 shadow-sm">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-2xl font-semibold">{paciente.nombre}</h2>
@@ -162,8 +150,6 @@ export function PacienteDetalle({
             )}
           </div>
         </div>
-
-        {/* Tutor responsable */}
         <div className="rounded-3xl border bg-card p-6 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wide text-primary">Tutor responsable</p>
 
@@ -229,20 +215,37 @@ export function PacienteDetalle({
           )}
         </div>
       </div>
-
-      {/* Pestaña */}
-      <div>
-        <span className="inline-flex rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">
-          Resumen General
-        </span>
+      <div className="flex flex-wrap gap-2">
+        {([
+          { id: "resumen", label: "Resumen General" },
+          { id: "vacunas", label: `Vacunas (${vacunas.length})` },
+        ] as const).map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setPestana(t.id)}
+            className={cn(
+              "inline-flex rounded-full px-4 py-2 text-sm font-medium transition-colors",
+              pestana === t.id
+                ? "bg-primary text-primary-foreground"
+                : "border bg-card text-muted-foreground hover:bg-primary/10 hover:text-primary",
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
-      <div className="rounded-3xl border bg-card p-6 shadow-sm">
-        <h2 className="text-lg font-semibold">Antecedentes</h2>
-        <p className="mt-2 whitespace-pre-line text-sm text-muted-foreground">
-          {paciente.antecedentes?.trim() || "Sin antecedentes registrados."}
-        </p>
-      </div>
+      {pestana === "resumen" ? (
+        <div className="rounded-3xl border bg-card p-6 shadow-sm">
+          <h2 className="text-lg font-semibold">Antecedentes</h2>
+          <p className="mt-2 whitespace-pre-line text-sm text-muted-foreground">
+            {paciente.antecedentes?.trim() || "Sin antecedentes registrados."}
+          </p>
+        </div>
+      ) : (
+        <VacunasPaciente pacienteId={paciente.id} registros={vacunas} onCambio={() => router.refresh()} />
+      )}
 
       {editando && (
         <EditarPacienteDialog

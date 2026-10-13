@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { PacienteDetalle } from "@/components/pacientes/paciente-detalle";
-import { listarCitas, listarDuenos, listarPacientes, obtenerPaciente } from "@/lib/api";
+import { listarCitas, listarDuenos, listarHistorialVacunas, listarPacientes, obtenerPaciente } from "@/lib/api";
 import type { Paciente } from "@/lib/types";
 
 export default async function PacienteDetallePage({ params }: { params: { id: string } }) {
@@ -24,13 +24,15 @@ export default async function PacienteDetallePage({ params }: { params: { id: st
     );
   }
 
-  const [resDuenos, resPacientes, resCitas] = await Promise.allSettled([
+  const [resDuenos, resPacientes, resCitas, resVacunas] = await Promise.allSettled([
     listarDuenos(),
     listarPacientes(),
     listarCitas(),
+    listarHistorialVacunas(paciente.id),
   ]);
 
   const duenos = resDuenos.status === "fulfilled" ? resDuenos.value : [];
+  const vacunas = resVacunas.status === "fulfilled" ? resVacunas.value : [];
 
   const otrosPacientes =
     resPacientes.status === "fulfilled" && paciente.duenoId
@@ -53,6 +55,7 @@ export default async function PacienteDetallePage({ params }: { params: { id: st
       duenos={duenos}
       otrosPacientes={otrosPacientes}
       ultimaVisita={ultimaVisita}
+      vacunas={vacunas}
     />
   );
 }

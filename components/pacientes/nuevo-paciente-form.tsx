@@ -87,7 +87,6 @@ export function NuevoPacienteForm() {
   setError(null);
 
   try {
-    // Busca ambos nombres en sus tablas independientes.
     const referencias = await buscarReferenciasMascota(
       nombreEspecie,
       nombreRaza,
@@ -161,7 +160,6 @@ export function NuevoPacienteForm() {
       </div>
 
       <form id="nuevo-paciente-form" onSubmit={handleSubmit} className="space-y-6">
-        {/* 1. Tutor Responsable */}
         <Card>
           <CardHeader className="space-y-1">
             <div className="flex items-center gap-2">
@@ -221,7 +219,6 @@ export function NuevoPacienteForm() {
           </CardContent>
         </Card>
 
-        {/* 2. Identificación del Paciente */}
         <Card>
           <CardHeader className="space-y-1">
             <div className="flex items-center gap-2">
@@ -302,7 +299,6 @@ export function NuevoPacienteForm() {
           </CardContent>
         </Card>
 
-        {/* 3. Antecedentes Médicos y Alergias */}
         <Card>
           <CardHeader className="space-y-1">
             <div className="flex items-center gap-2">
