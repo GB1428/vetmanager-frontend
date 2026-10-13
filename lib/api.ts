@@ -163,17 +163,8 @@ type EspecieBackend = {
   nombre_especie: string;
 };
 
-type RazaBackend = {
-  id_raza: number;
-  nombre_raza: string;
-};
-
 export async function listarEspecies(): Promise<EspecieBackend[]> {
   return request<EspecieBackend[]>("/especies");
-}
-
-export async function listarRazas(): Promise<RazaBackend[]> {
-  return request<RazaBackend[]>("/razas");
 }
 
 // saca tildes y mayusculas para comparar nombres
@@ -185,14 +176,9 @@ function normalizarTexto(valor: string): string {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
-export async function buscarReferenciasMascota(
-  nombreEspecie: string,
-  nombreRaza: string,
-): Promise<{ idEspecie: number; idRaza: number }> {
-  const [especies, razas] = await Promise.all([
-    listarEspecies(),
-    listarRazas(),
-  ]);
+// la raza es texto libre (se manda como string), solo la especie se busca por id
+export async function buscarIdEspecie(nombreEspecie: string): Promise<number> {
+  const especies = await listarEspecies();
 
   const especie = especies.find(
     (item) =>
@@ -209,22 +195,7 @@ export async function buscarReferenciasMascota(
     );
   }
 
-  const raza = razas.find(
-    (item) => normalizarTexto(item.nombre_raza) === normalizarTexto(nombreRaza),
-  );
-
-  if (!raza) {
-    logWarn(
-      `Raza "${nombreRaza}" no encontrada. Razas disponibles en la BD:`,
-      razas.map((r) => r.nombre_raza),
-    );
-    throw new Error(`La raza "${nombreRaza}" no existe en la base de datos.`);
-  }
-
-  return {
-    idEspecie: especie.id_especie,
-    idRaza: raza.id_raza,
-  };
+  return especie.id_especie;
 }
 
 // ---------- pacientes (mascotas) ----------
@@ -234,7 +205,6 @@ type MascotaBackend = {
   especie?: string;
   raza?: string;
   id_especie?: { id_especie: number; nombre?: string };
-  id_raza?: { id_raza: number; nombre?: string };
   sexo: string;
   fecha_nacimiento: string | null;
   peso: number;
@@ -249,7 +219,7 @@ function mapPaciente(m: MascotaBackend): Paciente {
     id: String(m.id_mascota),
     nombre: m.nombre,
     especie: m.especie ?? m.id_especie?.nombre ?? "—",
-    raza: m.raza ?? m.id_raza?.nombre ?? "—",
+    raza: m.raza ?? "—",
     sexo: m.sexo,
     fechaNacimiento: m.fecha_nacimiento ?? undefined,
     pesoKg: m.peso,
@@ -280,7 +250,6 @@ export async function crearPaciente(datos: {
   especie: string;
   raza: string;
   idEspecie: number;
-  idRaza: number;
   sexo: string;
   fechaNacimiento?: string;
   pesoKg: number;
@@ -299,10 +268,6 @@ export async function crearPaciente(datos: {
 
       id_especie: {
         id_especie: datos.idEspecie,
-      },
-
-      id_raza: {
-        id_raza: datos.idRaza,
       },
 
       sexo: datos.sexo,
@@ -596,7 +561,6 @@ export async function actualizarPaciente(
     especie?: string;
     raza?: string;
     idEspecie?: number;
-    idRaza?: number;
     sexo?: string;
     fechaNacimiento?: string | null;
     pesoKg?: number;
@@ -610,7 +574,6 @@ export async function actualizarPaciente(
   if (cambios.especie !== undefined) body.especie = cambios.especie;
   if (cambios.raza !== undefined) body.raza = cambios.raza;
   if (cambios.idEspecie !== undefined) body.id_especie = { id_especie: cambios.idEspecie };
-  if (cambios.idRaza !== undefined) body.id_raza = { id_raza: cambios.idRaza };
   if (cambios.sexo !== undefined) body.sexo = cambios.sexo;
   if (cambios.fechaNacimiento !== undefined) body.fecha_nacimiento = cambios.fechaNacimiento;
   if (cambios.pesoKg !== undefined) body.peso = cambios.pesoKg;

@@ -16,7 +16,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SelectOpciones } from "@/components/shared/select-opciones";
 import { ESPECIES, SEXOS, resolverOpcion } from "@/lib/constants";
-import { actualizarPaciente, buscarReferenciasMascota } from "@/lib/api";
+import { actualizarPaciente, buscarIdEspecie } from "@/lib/api";
 import { logError, logInfo, logWarn } from "@/lib/logger";
 import { mensajeParaUsuario } from "@/lib/errors";
 import type { Dueno, Paciente } from "@/lib/types";
@@ -89,13 +89,11 @@ export function EditarPacienteDialog({
     setError(null);
 
     try {
-      if (cambioEspecie || cambioRaza) {
-        const referencias = await buscarReferenciasMascota(especie, raza.trim());
+      if (cambioEspecie) {
         cambios.especie = especie;
-        cambios.raza = raza.trim();
-        cambios.idEspecie = referencias.idEspecie;
-        cambios.idRaza = referencias.idRaza;
+        cambios.idEspecie = await buscarIdEspecie(especie);
       }
+      if (cambioRaza) cambios.raza = raza.trim();
 
       await actualizarPaciente(paciente.id, cambios);
       logInfo("Paciente actualizado", { id: paciente.id, cambios });

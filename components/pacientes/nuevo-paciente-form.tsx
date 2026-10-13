@@ -15,7 +15,7 @@ import {
   Loader2,
 } from "lucide-react";
 import {
-  buscarReferenciasMascota
+  buscarIdEspecie
 
 } from "@/lib/api";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -87,17 +87,13 @@ export function NuevoPacienteForm() {
   setError(null);
 
   try {
-    const referencias = await buscarReferenciasMascota(
-      nombreEspecie,
-      nombreRaza,
-    );
+    const idEspecie = await buscarIdEspecie(nombreEspecie);
 
     await crearPaciente({
       nombre: datos.mascotaNombre,
       especie: nombreEspecie,
       raza: nombreRaza,
-      idEspecie: referencias.idEspecie,
-      idRaza: referencias.idRaza,
+      idEspecie,
       sexo,
       fechaNacimiento: datos.mascotaFechaNacimiento || undefined,
       pesoKg: Number(datos.mascotaPesoKg),
