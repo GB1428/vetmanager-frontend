@@ -371,7 +371,6 @@ type CitaBackend = {
   motivo: string;
   estado: string;
   mascota?: MascotaBackend;
-  dueno?: DuenoBackend;
 };
 function separarFechaHora(fechaHora: string): {
   fecha: string;
@@ -386,6 +385,7 @@ function separarFechaHora(fechaHora: string): {
 }
 function mapCita(c: CitaBackend): Cita {
   const fechaHora = separarFechaHora(c.fecha_hora);
+  const dueno = c.mascota?.dueno;
 
   return {
     id: String(c.id_cita),
@@ -393,16 +393,20 @@ function mapCita(c: CitaBackend): Cita {
     hora: fechaHora.hora,
     motivo: c.motivo ?? "",
     estado: c.estado ?? "",
+
     mascotaId:
       c.mascota?.id_mascota != null
         ? String(c.mascota.id_mascota)
         : undefined,
+
     mascotaNombre: c.mascota?.nombre ?? "—",
+
     duenoId:
-      c.dueno?.id_dueno != null
-        ? String(c.dueno.id_dueno)
+      dueno?.id_dueno != null
+        ? String(dueno.id_dueno)
         : undefined,
-    duenoNombre: c.dueno?.nombre_completo ?? "—",
+
+    duenoNombre: dueno?.nombre_completo ?? "—",
   };
 }
 
@@ -437,7 +441,6 @@ export async function crearCita(datos: {
   hora: string;
   motivo: string;
   idMascota: number;
-  idDueno: number;
   estado?: string;
 }): Promise<Cita> {
   const creada = await request<CitaBackend>(`/citas/${NEGOCIO_ID}`, {
@@ -446,14 +449,12 @@ export async function crearCita(datos: {
       fecha_hora: construirFechaHoraParaBackend(datos.fecha, datos.hora),
       motivo: datos.motivo,
       estado: datos.estado ?? "Pendiente",
-id_mascota: {
-  id_mascota: datos.idMascota,
-},
-id_dueno: {
-  id_dueno: datos.idDueno,
-},
+      id_mascota: {
+        id_mascota: datos.idMascota,
+      },
     }),
   });
+
   return mapCita(creada);
 }
 
@@ -462,31 +463,32 @@ type BoletaBackend = {
   idBoleta: number;
   idNegocio: number;
   idCita?: number;
-  idDueno: number;
   montoTotal: number;
   estadoPago?: string;
   metodoPago?: string;
   fechaEmision?: string;
-  dueno?: DuenoBackend;
   cita?: CitaBackend;
 };
 
 function mapBoleta(b: BoletaBackend): Boleta {
+  const mascota = b.cita?.mascota;
+  const dueno = mascota?.dueno;
+
   return {
     id: `#BOL-${b.idBoleta}`,
     idBoleta: b.idBoleta,
     idCita: b.idCita ?? b.cita?.id_cita,
-    idDueno: b.idDueno,
-    duenoNombre:
-      b.dueno?.nombre_completo ?? b.cita?.dueno?.nombre_completo ?? "—",
-    pacienteNombre: b.cita?.mascota?.nombre ?? "—",
+
+    idDueno: dueno?.id_dueno ?? 0,
+    duenoNombre: dueno?.nombre_completo ?? "—",
+
+    pacienteNombre: mascota?.nombre ?? "—",
     montoTotal: b.montoTotal,
     estadoPago: b.estadoPago,
     metodoPago: b.metodoPago,
     fecha: b.fechaEmision,
   };
 }
-
 export async function listarBoletas(): Promise<Boleta[]> {
   const data = await request<BoletaBackend[]>(`/boletas?negocioId=${NEGOCIO_ID}`);
   return data.map(mapBoleta);
