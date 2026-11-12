@@ -97,7 +97,7 @@ export function NuevoDuenoForm() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="dueno-telefono">Teléfono *</Label>
-                <Input id="dueno-telefono" name="telefono" type="tel" placeholder="Ej: +56 9 8765 4321" required />
+                <Input id="dueno-telefono" name="telefono" type="tel" placeholder="Ej: +56987654321" required />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="dueno-correo">Correo electrónico *</Label>

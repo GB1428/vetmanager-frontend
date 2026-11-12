@@ -3,7 +3,7 @@ import type { Paciente, Dueno, Solicitud, Cita, Boleta, Vacuna, RegistroVacuna }
 import { ApiError, extraerMensajeBackend, pistaParaError } from "@/lib/errors";
 import { logApiFallo, logApiOk, logInfo, logWarn } from "@/lib/logger";
 import { aFechaBackend } from "@/lib/fechas";
-
+import { DateTime } from "luxon";
 logInfo(`API_URL = ${API_URL} | NEGOCIO_ID = ${NEGOCIO_ID}`);
 
 // base de las llamadas al back (fetch + errores + logs)
@@ -20,9 +20,15 @@ async function ejecutar(
     res = await fetch(url, {
       ...options,
       headers: {
-        "Content-Type": "application/json",
-        ...(options?.headers ?? {}),
-      },
+  "Content-Type": "application/json",
+  ...(typeof window !== "undefined" &&
+  sessionStorage.getItem("accessToken")
+    ? {
+        Authorization: `Bearer ${sessionStorage.getItem("accessToken")}`,
+      }
+    : {}),
+  ...(options?.headers ?? {}),
+},
       cache: "no-store",
     });
   } catch (causa) {
@@ -248,12 +254,11 @@ export async function listarPacientes(): Promise<Paciente[]> {
 export async function crearPaciente(datos: {
   nombre: string;
   especie: string;
-  raza: string;
   idEspecie: number;
   sexo: string;
   fechaNacimiento?: string;
   pesoKg: number;
-  microchip?: number;
+  microchip?: string;
   observaciones?: string;
   antecedentes?: string;
   alergias?: string;
@@ -263,8 +268,8 @@ export async function crearPaciente(datos: {
     method: "POST",
     body: JSON.stringify({
       nombre: datos.nombre,
-      especie: datos.especie,
-      raza: datos.raza,
+
+
 
       id_especie: {
         id_especie: datos.idEspecie,
@@ -376,11 +381,17 @@ function separarFechaHora(fechaHora: string): {
   fecha: string;
   hora: string;
 } {
-  const fecha = new Date(fechaHora);
+  const fechaChile = DateTime.fromISO(fechaHora, {
+    zone: "utc",
+  }).setZone("America/Santiago");
+
+  if (!fechaChile.isValid) {
+    throw new Error(`Fecha inválida recibida del backend: ${fechaHora}`);
+  }
 
   return {
-    fecha: fecha.toISOString().slice(0, 10),
-    hora: fecha.toISOString().slice(11, 16),
+    fecha: fechaChile.toFormat("yyyy-MM-dd"),
+    hora: fechaChile.toFormat("HH:mm"),
   };
 }
 function mapCita(c: CitaBackend): Cita {
@@ -411,28 +422,25 @@ function mapCita(c: CitaBackend): Cita {
 }
 
 // parche de horas, el back guarda las fechas con desfase
-function calcularInstanteUtcParaHorarioChile(
+function construirFechaHoraParaBackend(
   fechaISO: string,
   hora: string,
-): Date {
-  const [anio, mes, dia] = fechaISO.split("-").map(Number);
-  const [horas, minutos] = hora.split(":").map(Number);
-  return new Date(Date.UTC(anio, mes - 1, dia, horas + 3, minutos, 0));
-}
+): string {
+  const fechaChile = DateTime.fromISO(`${fechaISO}T${hora}`, {
+    zone: "America/Santiago",
+  });
 
-function compensarDesfaseHorarioBackend(instanteUtc: Date): Date {
-  const TRES_HORAS_EN_MS = 3 * 60 * 60 * 1000;
-  return new Date(instanteUtc.getTime() - TRES_HORAS_EN_MS);
-}
+  if (!fechaChile.isValid) {
+    throw new Error(
+      `Fecha u hora inválida: ${fechaISO} ${hora}`,
+    );
+  }
 
-function construirFechaHoraParaBackend(fechaISO: string, hora: string): string {
-  const instanteCorrecto = calcularInstanteUtcParaHorarioChile(fechaISO, hora);
-  const instanteCompensado = compensarDesfaseHorarioBackend(instanteCorrecto);
-  return instanteCompensado.toISOString();
+  return fechaChile.toUTC().toISO()!;
 }
 
 export async function listarCitas(): Promise<Cita[]> {
-  const data = await request<CitaBackend[]>(`/citas/citas?negocioId=${NEGOCIO_ID}`);
+  const data = await request<CitaBackend[]>("/citas/todas");
   return data.map(mapCita);
 }
 
@@ -441,9 +449,10 @@ export async function crearCita(datos: {
   hora: string;
   motivo: string;
   idMascota: number;
+  idDueno: number;
   estado?: string;
 }): Promise<Cita> {
-  const creada = await request<CitaBackend>(`/citas/${NEGOCIO_ID}`, {
+  const creada = await request<CitaBackend>("/citas", {
     method: "POST",
     body: JSON.stringify({
       fecha_hora: construirFechaHoraParaBackend(datos.fecha, datos.hora),
@@ -451,6 +460,9 @@ export async function crearCita(datos: {
       estado: datos.estado ?? "Pendiente",
       id_mascota: {
         id_mascota: datos.idMascota,
+      },
+      id_dueno: {
+        id_dueno: datos.idDueno,
       },
     }),
   });

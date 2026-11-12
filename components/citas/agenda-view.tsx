@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { listarCitas } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import {
   ChevronLeft,
@@ -47,8 +48,26 @@ export function AgendaView({ citasIniciales }: { citasIniciales: Cita[] }) {
   const [citaEditando, setCitaEditando] = useState<Cita | null>(null);
 
   useEffect(() => {
-    setCitas(citasIniciales);
-  }, [citasIniciales]);
+  let activo = true;
+
+  async function cargarCitas() {
+    try {
+      const citasBackend = await listarCitas();
+
+      if (activo) {
+        setCitas(citasBackend);
+      }
+    } catch (error) {
+      console.error("Error al cargar las citas:", error);
+    }
+  }
+
+  cargarCitas();
+
+  return () => {
+    activo = false;
+  };
+}, []);
 
   const hoy = new Date();
   const [vista, setVista] = useState({ anio: hoy.getFullYear(), mes: hoy.getMonth() });

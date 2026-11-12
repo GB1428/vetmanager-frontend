@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { PawPrint, Plus } from "lucide-react";
 
@@ -6,33 +9,73 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { PacientesTable } from "@/components/pacientes/pacientes-table";
 import { listarPacientes, listarDuenos } from "@/lib/api";
 
-export default async function PacientesPage() {
-  let pacientes: Awaited<ReturnType<typeof listarPacientes>> = [];
-  let duenos: Awaited<ReturnType<typeof listarDuenos>> = [];
-  let error = false;
+export default function PacientesPage() {
+  const [pacientes, setPacientes] = useState<
+    Awaited<ReturnType<typeof listarPacientes>>
+  >([]);
 
-  const [resPacientes, resDuenos] = await Promise.allSettled([listarPacientes(), listarDuenos()]);
+  const [duenos, setDuenos] = useState<
+    Awaited<ReturnType<typeof listarDuenos>>
+  >([]);
 
-  if (resPacientes.status === "fulfilled") {
-    pacientes = resPacientes.value;
-  } else {
-    console.error("Error al cargar pacientes:", resPacientes.reason);
-    error = true;
-  }
+  const [error, setError] = useState(false);
+  const [cargando, setCargando] = useState(true);
 
-  if (resDuenos.status === "fulfilled") {
-    duenos = resDuenos.value;
-  } else {
-    console.error("Error al cargar los dueños para la edición de pacientes:", resDuenos.reason);
-  }
+  useEffect(() => {
+    let activo = true;
+
+    async function cargarDatos() {
+      try {
+        const [resPacientes, resDuenos] = await Promise.allSettled([
+          listarPacientes(),
+          listarDuenos(),
+        ]);
+
+        if (!activo) return;
+
+        if (resPacientes.status === "fulfilled") {
+          setPacientes(resPacientes.value);
+          setError(false);
+        } else {
+          console.error(
+            "Error al cargar pacientes:",
+            resPacientes.reason,
+          );
+          setError(true);
+        }
+
+        if (resDuenos.status === "fulfilled") {
+          setDuenos(resDuenos.value);
+        } else {
+          console.error(
+            "Error al cargar los dueños para la edición de pacientes:",
+            resDuenos.reason,
+          );
+        }
+      } finally {
+        if (activo) {
+          setCargando(false);
+        }
+      }
+    }
+
+    void cargarDatos();
+
+    return () => {
+      activo = false;
+    };
+  }, []);
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-semibold">Pacientes</h1>
-          <p className="text-sm text-muted-foreground">Mascotas registradas en el sistema</p>
+          <p className="text-sm text-muted-foreground">
+            Mascotas registradas en el sistema
+          </p>
         </div>
+
         <Button asChild className="rounded-full">
           <Link href="/dashboard/pacientes/nuevo">
             <Plus className="mr-1.5 h-4 w-4" />
@@ -41,13 +84,20 @@ export default async function PacientesPage() {
         </Button>
       </div>
 
-      {error && (
-        <p className="text-sm text-destructive">
-          No se pudo conectar con el servidor. Revisa que el backend esté corriendo.
+      {cargando && (
+        <p className="text-sm text-muted-foreground">
+          Cargando pacientes...
         </p>
       )}
 
-      {pacientes.length === 0 && !error ? (
+      {!cargando && error && (
+        <p className="text-sm text-destructive">
+          No se pudieron cargar los pacientes. Comprueba tu sesión
+          y la conexión con el servidor.
+        </p>
+      )}
+
+      {!cargando && !error && pacientes.length === 0 && (
         <EmptyState
           icon={PawPrint}
           title="Aún no hay pacientes registrados"
@@ -55,7 +105,9 @@ export default async function PacientesPage() {
           actionLabel="Registrar primer paciente"
           actionHref="/dashboard/pacientes/nuevo"
         />
-      ) : (
+      )}
+
+      {!cargando && !error && pacientes.length > 0 && (
         <PacientesTable pacientes={pacientes} duenos={duenos} />
       )}
     </div>

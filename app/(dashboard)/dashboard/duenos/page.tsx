@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { User, Plus } from "lucide-react";
 
@@ -6,24 +9,53 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { DuenosTable } from "@/components/duenos/duenos-table";
 import { listarDuenos } from "@/lib/api";
 
-export default async function DuenosPage() {
-  let duenos: Awaited<ReturnType<typeof listarDuenos>> = [];
-  let error = false;
+type Dueno = Awaited<ReturnType<typeof listarDuenos>>[number];
 
-  try {
-    duenos = await listarDuenos();
-  } catch (err) {
-    console.error("Error al cargar dueños:", err);
-    error = true;
-  }
+export default function DuenosPage() {
+  const [duenos, setDuenos] = useState<Dueno[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let activo = true;
+
+    async function cargarDuenos() {
+      try {
+        const resultado = await listarDuenos();
+
+        if (activo) {
+          setDuenos(resultado);
+        }
+      } catch (err) {
+        console.error("Error al cargar dueños:", err);
+
+        if (activo) {
+          setError(true);
+        }
+      } finally {
+        if (activo) {
+          setCargando(false);
+        }
+      }
+    }
+
+    void cargarDuenos();
+
+    return () => {
+      activo = false;
+    };
+  }, []);
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-semibold">Dueños</h1>
-          <p className="text-sm text-muted-foreground">Tutores responsables registrados en el sistema</p>
+          <p className="text-sm text-muted-foreground">
+            Tutores responsables registrados en el sistema
+          </p>
         </div>
+
         <Button asChild className="rounded-full">
           <Link href="/dashboard/duenos/nuevo">
             <Plus className="mr-1.5 h-4 w-4" />
@@ -32,13 +64,15 @@ export default async function DuenosPage() {
         </Button>
       </div>
 
-      {error && (
-        <p className="text-sm text-destructive">
-          No se pudo conectar con el servidor. Revisa que el backend esté corriendo.
+      {cargando ? (
+        <p className="text-sm text-muted-foreground">
+          Cargando dueños...
         </p>
-      )}
-
-      {duenos.length === 0 && !error ? (
+      ) : error ? (
+        <p className="text-sm text-destructive">
+          No se pudieron cargar los dueños.
+        </p>
+      ) : duenos.length === 0 ? (
         <EmptyState
           icon={User}
           title="Aún no hay dueños registrados"

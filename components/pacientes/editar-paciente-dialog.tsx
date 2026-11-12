@@ -56,7 +56,11 @@ export function EditarPacienteDialog({
       setError("Ingresa un peso válido.");
       return;
     }
-    if (microchip.trim() && !/^\d+$/.test(microchip.trim())) {
+    if (
+      microchip.trim() !== (paciente.microchip ?? "") &&
+      microchip.trim() &&
+      !/^\d+$/.test(microchip.trim())
+    ) {
       logWarn("Edición de paciente: microchip inválido", { microchip });
       setError("El microchip solo puede contener números.");
       return;
@@ -188,7 +192,7 @@ export function EditarPacienteDialog({
               <Label htmlFor="editar-paciente-microchip">Número de microchip</Label>
               <Input
                 id="editar-paciente-microchip"
-                type="number"
+                type="text"
                 value={microchip}
                 onChange={(e) => setMicrochip(e.target.value)}
               />
