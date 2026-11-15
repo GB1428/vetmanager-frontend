@@ -34,7 +34,7 @@ async function ejecutar(
   } catch (causa) {
     const detalle = causa instanceof Error ? causa.message : String(causa);
     const pista = pistaParaError(0, method);
-    const mensaje = "No se pudo conectar con el servidor. Revisa que el backend esté corriendo.";
+    const mensaje = "no se pudo conectar con el servidor, revisa que el backend esté prendido";
     logApiFallo({
       metodo: method,
       url,
@@ -149,7 +149,7 @@ export async function crearDueno(datos: {
   correo: string;
   direccion: string;
 }): Promise<Dueno> {
-  const creado = await request<DuenoBackend>(`/duenos/${NEGOCIO_ID}`, {
+  const creado = await request<DuenoBackend>("/duenos", {
     method: "POST",
     body: JSON.stringify({
       rut: datos.rut,
@@ -157,7 +157,6 @@ export async function crearDueno(datos: {
       telefono: datos.telefono,
       correo: datos.correo,
       direccion: datos.direccion,
-      negocioId: { negocioId: NEGOCIO_ID },
     }),
   });
   return mapDueno(creado);
@@ -210,6 +209,7 @@ type MascotaBackend = {
   nombre: string;
   especie?: string;
   raza?: string;
+  especy?: { id_especie: number; nombre_especie: string };
   id_especie?: { id_especie: number; nombre?: string };
   sexo: string;
   fecha_nacimiento: string | null;
@@ -224,7 +224,7 @@ function mapPaciente(m: MascotaBackend): Paciente {
   return {
     id: String(m.id_mascota),
     nombre: m.nombre,
-    especie: m.especie ?? m.id_especie?.nombre ?? "—",
+    especie: m.especie ?? m.especy?.nombre_especie ?? m.id_especie?.nombre ?? "—",
     raza: m.raza ?? "—",
     sexo: m.sexo,
     fechaNacimiento: m.fecha_nacimiento ?? undefined,
@@ -279,7 +279,6 @@ export async function crearPaciente(datos: {
       fecha_nacimiento: datos.fechaNacimiento || undefined,
       peso: datos.pesoKg,
       microchip: datos.microchip,
-      observaciones: datos.observaciones,
       antecedentes: datos.antecedentes,
       alergias: datos.alergias,
 
@@ -316,6 +315,7 @@ function mapSolicitud(c: ContactoBackend): Solicitud {
     estado:
       estado === "aceptada" || estado === "rechazada" ? estado : "pendiente",
     fechaCreacion: c.fecha_solicitud,
+    duenoId: c.dueno?.id_dueno != null ? String(c.dueno.id_dueno) : undefined,
   };
 }
 
@@ -340,14 +340,12 @@ export async function crearSolicitud(datos: {
     body: JSON.stringify({
       razon_consulta: datos.motivo,
       nom_mascota: datos.mascota,
-      negocioId: { negocioId: NEGOCIO_ID },
       dueno: {
         rut: datos.rut,
         nombre_completo: datos.nombreDueno,
         telefono: datos.telefono,
         correo: datos.correo,
         direccion: datos.direccion,
-        negocioId:{negocioId:NEGOCIO_ID}
       },
     }),
   });
@@ -366,6 +364,11 @@ export async function actualizarEstadoSolicitud(
     },
   );
   return mapSolicitud(actualizada);
+}
+
+export async function eliminarSolicitud(id: string): Promise<void> {
+  validarId(id, "la solicitud");
+  await requestSinRespuesta(`/contacto-emergencia/${id}`, { method: "DELETE" });
 }
 
 // ---------- citas ----------
@@ -475,6 +478,10 @@ type BoletaBackend = {
   idBoleta: number;
   idNegocio: number;
   idCita?: number;
+  idDueno?: number;
+  id_mascota?: number;
+  dueno?: DuenoBackend;
+  mascota?: MascotaBackend;
   montoTotal: number;
   estadoPago?: string;
   metodoPago?: string;
@@ -483,15 +490,16 @@ type BoletaBackend = {
 };
 
 function mapBoleta(b: BoletaBackend): Boleta {
-  const mascota = b.cita?.mascota;
-  const dueno = mascota?.dueno;
+  const mascota = b.mascota ?? b.cita?.mascota;
+  const dueno = b.dueno ?? mascota?.dueno;
 
   return {
     id: `#BOL-${b.idBoleta}`,
     idBoleta: b.idBoleta,
     idCita: b.idCita ?? b.cita?.id_cita,
 
-    idDueno: dueno?.id_dueno ?? 0,
+    idDueno: b.idDueno ?? dueno?.id_dueno ?? 0,
+    idMascota: b.id_mascota ?? mascota?.id_mascota,
     duenoNombre: dueno?.nombre_completo ?? "—",
 
     pacienteNombre: mascota?.nombre ?? "—",
@@ -508,6 +516,7 @@ export async function listarBoletas(): Promise<Boleta[]> {
 
 export async function crearBoleta(datos: {
   idDueno: number;
+  idMascota: number;
   idCita?: number;
   montoTotal: number;
   estadoPago?: string;
@@ -519,6 +528,7 @@ export async function crearBoleta(datos: {
       idNegocio: NEGOCIO_ID,
       idCita: datos.idCita,
       idDueno: datos.idDueno,
+      id_mascota: datos.idMascota,
       montoTotal: datos.montoTotal,
       estadoPago: datos.estadoPago,
       metodoPago: datos.metodoPago,
@@ -585,8 +595,6 @@ export async function actualizarPaciente(
   validarId(id, "el paciente");
   const body: Record<string, unknown> = {};
   if (cambios.nombre !== undefined) body.nombre = cambios.nombre;
-  if (cambios.especie !== undefined) body.especie = cambios.especie;
-  if (cambios.raza !== undefined) body.raza = cambios.raza;
   if (cambios.idEspecie !== undefined) body.id_especie = { id_especie: cambios.idEspecie };
   if (cambios.sexo !== undefined) body.sexo = cambios.sexo;
   if (cambios.fechaNacimiento !== undefined) body.fecha_nacimiento = cambios.fechaNacimiento;
@@ -618,6 +626,7 @@ type VacunaBackend = {
   id_vacuna: number;
   nombre_vacuna: string;
   descripcion: string;
+  precio?: number;
   especy?: { id_especie: number; nombre_especie: string };
 };
 
@@ -636,6 +645,7 @@ function mapVacuna(v: VacunaBackend): Vacuna {
     id: String(v.id_vacuna),
     nombre: v.nombre_vacuna,
     descripcion: v.descripcion,
+    precio: v.precio ?? 0,
     especie: v.especy?.nombre_especie,
   };
 }
@@ -646,6 +656,7 @@ function mapRegistroVacuna(h: HistorialVacunaBackend): RegistroVacuna {
     vacunaId: h.vacuna ? String(h.vacuna.id_vacuna) : "",
     vacunaNombre: h.vacuna?.nombre_vacuna ?? "Vacuna",
     vacunaDescripcion: h.vacuna?.descripcion ?? "",
+    precio: h.vacuna?.precio ?? 0,
     lote: h.lote,
     fechaAplicacion: h["fecha_aplicación"],
     proximaDosis: h.proxima_dosis,
@@ -658,9 +669,11 @@ export async function listarVacunas(): Promise<Vacuna[]> {
   return data.map(mapVacuna);
 }
 
+// el precio va en pesos y entero (el back lo pide @IsInt)
 export async function crearVacuna(datos: {
   nombre: string;
   descripcion: string;
+  precio: number;
   idEspecie: number;
 }): Promise<Vacuna> {
   const creada = await request<VacunaBackend>("/vacunas", {
@@ -668,6 +681,7 @@ export async function crearVacuna(datos: {
     body: JSON.stringify({
       nombre_vacuna: datos.nombre,
       descripcion: datos.descripcion,
+      precio: datos.precio,
       id_especie: { id_especie: datos.idEspecie },
     }),
   });

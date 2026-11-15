@@ -50,3 +50,16 @@ export function resolverOpcion(opciones: Opcion[], valor?: string | null): strin
 }
 
 export const OBSERVACION_VACIA = "Sin observaciones";
+
+export const UNIDADES_DURACION: Opcion[] = [
+  { value: "Días", label: "Días" },
+  { value: "Semanas", label: "Semanas" },
+  { value: "Meses", label: "Meses" },
+];
+
+export const CATEGORIAS_EXAMEN: { value: "sangre" | "radiografia" | "ecografia" | "general"; label: string }[] = [
+  { value: "sangre", label: "Sangre" },
+  { value: "radiografia", label: "Radiografías" },
+  { value: "ecografia", label: "Ecografías" },
+  { value: "general", label: "General" },
+];

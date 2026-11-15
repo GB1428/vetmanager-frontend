@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, X, Clock3, Phone, Mail, MapPin } from "lucide-react";
+import { Check, X, Clock3, Phone, Mail, MapPin, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -10,6 +10,7 @@ type SolicitudCardProps = {
   solicitud: Solicitud;
   onAceptar: (id: string) => void;
   onRechazar: (id: string) => void;
+  onBorrar?: (id: string) => void;
 };
 
 const estadoLabel: Record<Solicitud["estado"], string> = {
@@ -24,7 +25,7 @@ const estadoClase: Record<Solicitud["estado"], string> = {
   rechazada: "bg-destructive/10 text-destructive",
 };
 
-export function SolicitudCard({ solicitud, onAceptar, onRechazar }: SolicitudCardProps) {
+export function SolicitudCard({ solicitud, onAceptar, onRechazar, onBorrar }: SolicitudCardProps) {
   const fecha = new Date(solicitud.fechaCreacion);
 
   return (
@@ -70,6 +71,15 @@ export function SolicitudCard({ solicitud, onAceptar, onRechazar }: SolicitudCar
           <Button size="sm" className="rounded-full" onClick={() => onAceptar(solicitud.id)}>
             <Check className="mr-1.5 h-4 w-4" />
             Aceptar y agendar
+          </Button>
+        </div>
+      )}
+
+      {solicitud.estado !== "pendiente" && onBorrar && (
+        <div className="mt-4 flex justify-end">
+          <Button variant="outline" size="sm" className="rounded-full" onClick={() => onBorrar(solicitud.id)}>
+            <Trash2 className="mr-1.5 h-4 w-4" />
+            Borrar
           </Button>
         </div>
       )}

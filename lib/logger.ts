@@ -27,11 +27,11 @@ export function logError(contexto: string, err: unknown, datos?: Record<string, 
   console.error(`${PREFIJO} ${contexto}:`, err);
 
   if (err instanceof Error) {
-    console.error("Detalle del error:", err.message);
+    console.error("lo que dijo el error:", err.message);
   }
 
   if (esDesarrollo && datos) {
-    console.error("Datos con los que se intentó:", datos);
+    console.error("datos con los que lo intenté:", datos);
   }
 }
 
@@ -61,11 +61,11 @@ export function logApiFallo(datos: {
   pista: string;
   body?: unknown;
 }) {
-  const estado = datos.status === 0 ? "SIN RESPUESTA" : String(datos.status);
+  const estado = datos.status === 0 ? "sin respuesta" : String(datos.status);
   console.error(`${PREFIJO}[API] ${datos.metodo} ${datos.url} -> ${estado} (${datos.ms}ms)`, {
     mensaje: datos.mensaje,
     respuestaBackend: datos.respuesta || "(vacía)",
     ...(esDesarrollo && datos.body !== undefined ? { enviado: parsearBody(datos.body) } : {}),
-    pista: datos.pista,
+    "ojo con esto": datos.pista,
   });
 }

@@ -37,6 +37,7 @@ export type Solicitud = {
   motivo: string;
   estado: "pendiente" | "aceptada" | "rechazada";
   fechaCreacion: string;
+  duenoId?: string;
 };
 
 export type Cita = {
@@ -56,6 +57,7 @@ export type Boleta = {
   idBoleta: number;
   idCita?: number;
   idDueno: number;
+  idMascota?: number;
   duenoNombre: string;
   pacienteNombre: string;
   montoTotal: number;
@@ -68,6 +70,7 @@ export type Vacuna = {
   id: string;
   nombre: string;
   descripcion: string;
+  precio: number;
   especie?: string;
 };
 
@@ -76,8 +79,68 @@ export type RegistroVacuna = {
   vacunaId: string;
   vacunaNombre: string;
   vacunaDescripcion: string;
+  precio: number;
   lote: string;
   fechaAplicacion: string;
   proximaDosis: string;
   observaciones: string;
+};
+
+export type MedicamentoReceta = {
+  uid: string;
+  nombre: string;
+  dosis: string;
+  frecuencia: string;
+  duracion: string;
+  unidadDuracion: string;
+  instrucciones: string;
+  precio: number;
+};
+
+export type PlantillaReceta = {
+  id: string;
+  nombre: string;
+  dosis: string;
+  frecuencia: string;
+  duracion: string;
+  unidadDuracion: string;
+  instrucciones: string;
+  precio: number;
+  antiparasitario: boolean;
+};
+
+export type CategoriaExamen = "sangre" | "radiografia" | "ecografia" | "general";
+
+export type Examen = {
+  id: string;
+  nombreArchivo: string;
+  tipoArchivo: "pdf" | "imagen";
+  categoria: CategoriaExamen;
+  pacienteId: string;
+  pacienteNombre: string;
+  fecha: string;
+};
+
+export type OrigenReceta = "cita" | "paciente";
+
+export type RecetaCreada = {
+  id: string;
+  origen: OrigenReceta;
+  pacienteId: string;
+  pacienteNombre: string;
+  citaId?: string;
+  citaFecha?: string;
+  citaHora?: string;
+  citaMotivo?: string;
+  medicamentos: MedicamentoReceta[];
+  recomendaciones: string;
+  fecha: string;
+};
+
+export type ItemBoleta = {
+  uid: string;
+  concepto: string;
+  precio: string;
+  incluido: boolean;
+  origen: "vacuna" | "manual";
 };

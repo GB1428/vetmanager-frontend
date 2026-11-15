@@ -13,7 +13,7 @@ import { OBSERVACION_VACIA, SEXOS, resolverOpcion } from "@/lib/constants";
 import { calcularEdad, diasHasta, formatearFechaCorta, formatearInstanteCorto, hoyLocalISO } from "@/lib/fechas";
 import { mensajeParaUsuario } from "@/lib/errors";
 import { logError, logInfo } from "@/lib/logger";
-import { cn } from "@/lib/utils";
+import { cn, formatearPeso } from "@/lib/utils";
 import type { Paciente, RegistroVacuna, Vacuna } from "@/lib/types";
 
 const ETIQUETAS_ESPECIE: Record<string, string> = {
@@ -300,13 +300,16 @@ export function VacunasView({
                     {vacunasDisponibles.map((v) => (
                       <SelectItem key={v.id} value={v.id}>
                         {v.nombre}
-                        {v.especie ? ` (${v.especie})` : ""}
+                        {v.especie ? ` (${v.especie})` : ""} · {formatearPeso(v.precio)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                {vacunaSeleccionada?.descripcion && (
-                  <p className="px-2 text-xs text-muted-foreground">{vacunaSeleccionada.descripcion}</p>
+                {vacunaSeleccionada && (
+                  <p className="px-2 text-xs text-muted-foreground">
+                    Precio: <span className="font-bold text-foreground">{formatearPeso(vacunaSeleccionada.precio)}</span>
+                    {vacunaSeleccionada.descripcion ? ` • ${vacunaSeleccionada.descripcion}` : ""}
+                  </p>
                 )}
               </div>
 
@@ -414,7 +417,7 @@ export function VacunasView({
                         )}
                         <p className="mt-1.5 text-xs text-muted-foreground">
                           Lote: <span className="font-bold text-foreground">{r.lote}</span> • Próxima dosis:{" "}
-                          {formatearFechaCorta(r.proximaDosis)}
+                          {formatearFechaCorta(r.proximaDosis)} • Precio: {formatearPeso(r.precio)}
                         </p>
                         {r.observaciones && r.observaciones !== OBSERVACION_VACIA && (
                           <p className="mt-1.5 flex items-start gap-1.5 text-xs text-muted-foreground">

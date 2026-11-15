@@ -31,6 +31,7 @@ export function NuevaVacunaDialog({
   const [especies, setEspecies] = useState<Opcion[]>([]);
   const [nombre, setNombre] = useState("");
   const [descripcion, setDescripcion] = useState("");
+  const [precio, setPrecio] = useState("");
   const [especieId, setEspecieId] = useState("");
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,10 +55,21 @@ export function NuevaVacunaDialog({
       return;
     }
 
+    const precioNumero = Number(precio);
+    if (precio === "" || !Number.isInteger(precioNumero) || precioNumero < 0) {
+      setError("Ingresa un precio válido (número entero).");
+      return;
+    }
+
     setGuardando(true);
     setError(null);
 
-    const datos = { nombre: nombre.trim(), descripcion: descripcion.trim(), idEspecie: Number(especieId) };
+    const datos = {
+      nombre: nombre.trim(),
+      descripcion: descripcion.trim(),
+      precio: precioNumero,
+      idEspecie: Number(especieId),
+    };
 
     try {
       const creada = await crearVacuna(datos);
@@ -99,6 +111,19 @@ export function NuevaVacunaDialog({
               onValueChange={setEspecieId}
               opciones={especies}
               placeholder="Selecciona una especie"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="nueva-vacuna-precio">Precio *</Label>
+            <Input
+              id="nueva-vacuna-precio"
+              type="number"
+              min="0"
+              step="1"
+              placeholder="Ej: 15000"
+              value={precio}
+              onChange={(e) => setPrecio(e.target.value)}
+              required
             />
           </div>
           <div className="space-y-2">

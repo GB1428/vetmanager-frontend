@@ -42,6 +42,7 @@ function LoginContent() {
       // Almacenamiento temporal para probar el flujo.
       // Para producción, es preferible una cookie HttpOnly segura.
      sessionStorage.setItem('accessToken', datos.accessToken);
+     sessionStorage.setItem('usuario', JSON.stringify(datos.usuario ?? {}));
 
 // Redirigir al Dashboard después de iniciar sesión correctamente.
 window.location.assign('/dashboard');

@@ -48,39 +48,29 @@ export function pistaParaError(status: number, method: string): string {
   const esEscritura = method !== "GET";
 
   if (status === 0) {
-    return (
-      `No hubo respuesta del servidor. Revisa: (1) que el backend esté corriendo en ${API_URL}; ` +
-      "(2) que NEXT_PUBLIC_API_URL en .env sea correcta (al cambiarla hay que reiniciar `npm run dev`); " +
-      "(3) si el error sale en el navegador y no en la terminal, que el backend tenga CORS habilitado para este origen."
-    );
+    return `no hubo respuesta del servidor, puede que el backend esté apagado o que la dirección (${API_URL}) no sea la correcta. si cambiaste el .env, reinicia el front. y si solo falla en el navegador, puede ser el cors`;
   }
   if (status === 400 || status === 422) {
-    return (
-      "El backend rechazó los datos (validación). Compara el body enviado con el DTO del backend: " +
-      "nombres de campos, tipos (número vs. texto) y campos obligatorios. El mensaje del backend suele decir cuál falla."
-    );
+    return "el back no aceptó los datos que le mandamos, puede que falte un campo, que sobre uno o que venga con otro tipo. el mensaje de arriba suele decir cuál";
   }
   if (status === 401 || status === 403) {
-    return "Sin permisos o sesión no válida para este endpoint.";
+    return "parece que la sesión se venció o no hay permiso para esto, prueba iniciando sesión de nuevo";
   }
   if (status === 404) {
     return esEscritura
-      ? "Ruta o registro no encontrado. Si es una actualización, confirma que el backend expone ese endpoint (PATCH /recurso/:id) y que el id existe. Un id `undefined` en la URL suele indicar que faltó el dato en el frontend."
-      : "Ruta no encontrada. Revisa que el path coincida con el controlador del backend.";
+      ? "no encontré esa ruta o ese registro, puede que el id no exista o que el back no tenga ese endpoint. si el id sale como undefined, el dato no llegó desde el front"
+      : "no encontré esa ruta, puede que el nombre no coincida con el del controlador del back";
   }
   if (status === 405) {
-    return "El backend no acepta este método en esa ruta. Si el endpoint de actualización usa PUT en vez de PATCH, cámbialo en lib/api.ts.";
+    return "el back no acepta ese método en esa ruta, quizás usa put en vez de patch";
   }
   if (status === 409) {
-    return "Conflicto: probablemente un dato único ya existe (RUT, microchip, correo).";
+    return "ya existe algo igual, probablemente un rut, un correo o un microchip repetido";
   }
   if (status >= 500) {
-    return (
-      "Error interno del backend. Mira la terminal del backend para ver el stack trace. " +
-      "Causas comunes: relación (FK) inexistente, valor null en columna NOT NULL, o un tipo de dato que no calza con la entidad."
-    );
+    return "se cayó algo adentro del back, en su terminal debería aparecer el detalle. suele ser una relación que no existe o un campo vacío que no puede serlo";
   }
-  return "Respuesta inesperada del backend. Revisa el detalle en la consola.";
+  return "el back respondió algo raro, el detalle debería estar en la consola";
 }
 
 export function mensajeParaUsuario(err: unknown, porDefecto: string): string {

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { EditarRegistroDialog } from "@/components/vacunas/editar-registro-dialog";
 import { OBSERVACION_VACIA } from "@/lib/constants";
 import { diasHasta, formatearFechaCorta, formatearInstanteCorto } from "@/lib/fechas";
+import { formatearPeso } from "@/lib/utils";
 import type { RegistroVacuna } from "@/lib/types";
 
 function estadoProxima(valor: string): { texto: string; vencida: boolean } {
@@ -79,6 +80,9 @@ export function VacunasPaciente({
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
                   <span className="rounded-full bg-card px-2.5 py-1 text-muted-foreground shadow-sm">
                     Próxima dosis: {formatearFechaCorta(r.proximaDosis)}
+                  </span>
+                  <span className="rounded-full bg-card px-2.5 py-1 text-muted-foreground shadow-sm">
+                    Precio: {formatearPeso(r.precio)}
                   </span>
                   <span
                     className={

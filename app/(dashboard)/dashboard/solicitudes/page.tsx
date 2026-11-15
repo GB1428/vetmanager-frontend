@@ -5,13 +5,16 @@ import { Inbox } from "lucide-react";
 
 import { EmptyState } from "@/components/shared/empty-state";
 import { SolicitudCard } from "@/components/solicitudes/solicitud-card";
-import { listarSolicitudes, actualizarEstadoSolicitud } from "@/lib/api";
+import { AceptarSolicitudDialog } from "@/components/solicitudes/aceptar-solicitud-dialog";
+import { eliminarSolicitud, listarSolicitudes } from "@/lib/api";
+import { mensajeParaUsuario } from "@/lib/errors";
 import type { Solicitud } from "@/lib/types";
 
 export default function SolicitudesPage() {
   const [solicitudes, setSolicitudes] = useState<Solicitud[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [aceptando, setAceptando] = useState<Solicitud | null>(null);
 
   function cargar() {
     setCargando(true);
@@ -21,8 +24,8 @@ export default function SolicitudesPage() {
         setError(null);
       })
       .catch((err) => {
-        console.error("Error al cargar solicitudes:", err);
-        setError("No se pudo conectar con el servidor. Revisa que el backend esté corriendo.");
+        console.error("no se pudieron cargar las solicitudes:", err);
+        setError("no se pudo conectar con el servidor, revisa que el backend esté prendido");
       })
       .finally(() => setCargando(false));
   }
@@ -31,14 +34,20 @@ export default function SolicitudesPage() {
     cargar();
   }, []);
 
-  async function actualizarEstado(id: string, estado: Solicitud["estado"]) {
+  async function borrar(id: string) {
     try {
-      await actualizarEstadoSolicitud(id, estado);
-      cargar();
+      await eliminarSolicitud(id);
+      setSolicitudes((prev) => prev.filter((s) => s.id !== id));
+      setError(null);
     } catch (err) {
-      console.error("Error al actualizar la solicitud:", err);
-      setError("No se pudo actualizar la solicitud. Intenta de nuevo.");
+      console.error("no se pudo borrar la solicitud:", err);
+      setError(mensajeParaUsuario(err, "no se pudo borrar la solicitud, intenta de nuevo"));
     }
+  }
+
+  function rechazar(id: string) {
+    if (!window.confirm("¿rechazar esta solicitud? se va a borrar de la lista")) return;
+    void borrar(id);
   }
 
   return (
@@ -64,11 +73,20 @@ export default function SolicitudesPage() {
             <SolicitudCard
               key={s.id}
               solicitud={s}
-              onAceptar={(id) => actualizarEstado(id, "aceptada")}
-              onRechazar={(id) => actualizarEstado(id, "rechazada")}
+              onAceptar={() => setAceptando(s)}
+              onRechazar={rechazar}
+              onBorrar={borrar}
             />
           ))}
         </div>
+      )}
+
+      {aceptando && (
+        <AceptarSolicitudDialog
+          solicitud={aceptando}
+          onClose={() => setAceptando(null)}
+          onAceptada={(id) => setSolicitudes((prev) => prev.filter((s) => s.id !== id))}
+        />
       )}
     </div>
   );

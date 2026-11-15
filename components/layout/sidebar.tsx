@@ -9,11 +9,10 @@ import {
   Calendar,
   PawPrint,
   User,
-  FolderOpen,
+  FileText,
   Syringe,
   Receipt,
-  BarChart3,
-  Users,
+  FlaskConical,
   Plus,
 } from "lucide-react";
 
@@ -26,11 +25,10 @@ const links = [
   { href: "/dashboard/agenda", label: "Agenda", icon: Calendar },
   { href: "/dashboard/pacientes", label: "Pacientes", icon: PawPrint },
   { href: "/dashboard/duenos", label: "Dueños", icon: User },
-  { href: "/dashboard/expedientes", label: "Expedientes", icon: FolderOpen },
+  { href: "/dashboard/recetas", label: "Recetas", icon: FileText },
   { href: "/dashboard/vacunas", label: "Vacunas", icon: Syringe },
   { href: "/dashboard/boletas", label: "Boletas", icon: Receipt },
-  { href: "/dashboard/reportes", label: "Reportes", icon: BarChart3 },
-  { href: "/dashboard/usuarios", label: "Usuarios", icon: Users },
+  { href: "/dashboard/examenes", label: "Exámenes", icon: FlaskConical },
 ];
 
 export function Sidebar() {

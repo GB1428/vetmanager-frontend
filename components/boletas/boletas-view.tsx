@@ -9,7 +9,6 @@ import {
   TrendingUp,
   Clock,
   PawPrint,
-  Loader2,
   ChevronLeft,
   ChevronRight,
   Receipt,
@@ -19,29 +18,15 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmptyState } from "@/components/shared/empty-state";
-import { SelectOpciones } from "@/components/shared/select-opciones";
 import { EditarBoletaDialog } from "@/components/boletas/editar-boleta-dialog";
-import { ESTADOS_PAGO, ESTADO_PAGO_INICIAL, METODOS_PAGO } from "@/lib/constants";
-import { cn } from "@/lib/utils";
-import { crearBoleta } from "@/lib/api";
-import type { Boleta, Dueno, Cita } from "@/lib/types";
+import { NuevaBoletaDialog } from "@/components/boletas/nueva-boleta-dialog";
+import { cn, formatearPeso } from "@/lib/utils";
+import type { Boleta, Dueno, Cita, Paciente } from "@/lib/types";
 
 const PAGINA_TAMANO = 10;
-
-function formatMonto(monto: number) {
-  return `$${monto.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
 
 function formatFecha(fechaISO?: string) {
   if (!fechaISO) return "—";
@@ -58,10 +43,12 @@ function esPago(b: Boleta) {
 export function BoletasView({
   boletasIniciales,
   duenos,
+  pacientes,
   citas,
 }: {
   boletasIniciales: Boleta[];
   duenos: Dueno[];
+  pacientes: Paciente[];
   citas: Cita[];
 }) {
   const router = useRouter();
@@ -77,19 +64,6 @@ export function BoletasView({
   const [pagina, setPagina] = useState(1);
 
   const [dialogAbierto, setDialogAbierto] = useState(false);
-  const [guardando, setGuardando] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const [duenoId, setDuenoId] = useState("");
-  const [citaId, setCitaId] = useState("");
-  const [montoTotal, setMontoTotal] = useState("");
-  const [estadoPago, setEstadoPago] = useState(ESTADO_PAGO_INICIAL);
-  const [metodoPago, setMetodoPago] = useState("");
-
-  const citasDelDueno = useMemo(
-    () => citas.filter((c) => c.duenoId === duenoId),
-    [citas, duenoId]
-  );
 
   const ingresos = useMemo(
     () => boletas.filter(esPago).reduce((acc, b) => acc + b.montoTotal, 0),
@@ -117,70 +91,6 @@ export function BoletasView({
   const inicio = (paginaActual - 1) * PAGINA_TAMANO;
   const visibles = filtradas.slice(inicio, inicio + PAGINA_TAMANO);
 
-  function resetFormulario() {
-    setDuenoId("");
-    setCitaId("");
-    setMontoTotal("");
-    setEstadoPago(ESTADO_PAGO_INICIAL);
-    setMetodoPago("");
-    setError(null);
-  }
-
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const duenoSeleccionado = duenos.find((d) => d.id === duenoId);
-
-    if (!duenoSeleccionado) {
-      setError("Selecciona un dueño.");
-      return;
-    }
-    const montoNumero = Number(montoTotal);
-    if (!montoTotal || Number.isNaN(montoNumero) || montoNumero < 0) {
-      setError("Ingresa un monto total válido.");
-      return;
-    }
-
-    setGuardando(true);
-    setError(null);
-
-    try {
-      const citaSeleccionada = citasDelDueno.find((c) => c.id === citaId);
-      const creada = await crearBoleta({
-        idDueno: Number(duenoSeleccionado.id),
-        idCita: citaSeleccionada ? Number(citaSeleccionada.id) : undefined,
-        montoTotal: montoNumero,
-        estadoPago: estadoPago.trim() || undefined,
-        metodoPago: metodoPago.trim() || undefined,
-      });
-
-      const registrada: Boleta = {
-        ...creada,
-        duenoNombre: creada.duenoNombre !== "—" ? creada.duenoNombre : duenoSeleccionado.nombre,
-        pacienteNombre:
-          creada.pacienteNombre !== "—" ? creada.pacienteNombre : citaSeleccionada?.mascotaNombre ?? "—",
-      };
-
-      setBoletas((prev) => [registrada, ...prev]);
-      setDialogAbierto(false);
-      resetFormulario();
-      setPagina(1);
-    }  catch (err) {
-  console.error("Error al registrar la boleta:", err);
-
-  if (err instanceof Error) {
-    console.error("Detalle del error:", err.message);
-  }
-
-  setError(
-    err instanceof Error
-      ? err.message
-      : "No se pudo guardar la boleta.",
-  );
-} finally {
-      setGuardando(false);
-    }
-  }
-
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -197,10 +107,7 @@ export function BoletasView({
           </Button>
           <Button
             className="rounded-full"
-            onClick={() => {
-              resetFormulario();
-              setDialogAbierto(true);
-            }}
+            onClick={() => setDialogAbierto(true)}
           >
             <Plus className="mr-1.5 h-4 w-4" />
             Nueva Boleta
@@ -213,7 +120,7 @@ export function BoletasView({
           <CardContent className="flex items-center justify-between p-6">
             <div className="space-y-1">
               <p className="text-sm text-muted-foreground">Ingresos</p>
-              <p className="text-3xl font-semibold text-primary">{formatMonto(ingresos)}</p>
+              <p className="text-3xl font-semibold text-primary">{formatearPeso(ingresos)}</p>
               <p className="text-xs text-muted-foreground">Boletas con pago registrado</p>
             </div>
             <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
@@ -225,7 +132,7 @@ export function BoletasView({
           <CardContent className="flex items-center justify-between p-6">
             <div className="space-y-1">
               <p className="text-sm text-muted-foreground">Cobros Pendientes</p>
-              <p className="text-3xl font-semibold text-primary">{formatMonto(totalPendiente)}</p>
+              <p className="text-3xl font-semibold text-primary">{formatearPeso(totalPendiente)}</p>
               <p className="text-xs text-muted-foreground">
                 {pendientes.length} boleta{pendientes.length === 1 ? "" : "s"} por cobrar
               </p>
@@ -315,7 +222,7 @@ export function BoletasView({
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell className="whitespace-nowrap">{formatMonto(b.montoTotal)}</TableCell>
+                        <TableCell className="whitespace-nowrap">{formatearPeso(b.montoTotal)}</TableCell>
                         <TableCell>
                           <span
                             className={cn(
@@ -376,111 +283,18 @@ export function BoletasView({
         </CardContent>
       </Card>
 
-      <Dialog open={dialogAbierto} onOpenChange={setDialogAbierto}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Nueva Boleta</DialogTitle>
-            <DialogDescription>Registra el cobro asociado a un dueño (y, si corresponde, a una cita).</DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label>Dueño *</Label>
-              {duenos.length > 0 ? (
-                <Select
-                  value={duenoId}
-                  onValueChange={(v) => {
-                    setDuenoId(v);
-                    setCitaId("");
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecciona un dueño" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {duenos.map((d) => (
-                      <SelectItem key={d.id} value={d.id}>
-                        {d.nombre}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <div className="flex h-10 w-full items-center rounded-lg border border-dashed border-input bg-secondary/30 px-3 text-sm text-muted-foreground">
-                  No hay dueños registrados
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label>Cita asociada (opcional)</Label>
-              <Select value={citaId} onValueChange={setCitaId} disabled={!duenoId || citasDelDueno.length === 0}>
-                <SelectTrigger>
-                  <SelectValue
-                    placeholder={
-                      !duenoId
-                        ? "Selecciona primero un dueño"
-                        : citasDelDueno.length === 0
-                        ? "Este dueño no tiene citas"
-                        : "Sin cita asociada"
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {citasDelDueno.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.fecha} {c.hora} · {c.mascotaNombre}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="boleta-monto">Monto Total *</Label>
-              <Input
-                id="boleta-monto"
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="Ej: 45.00"
-                value={montoTotal}
-                onChange={(e) => setMontoTotal(e.target.value)}
-                required
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="boleta-estado">Estado de Pago</Label>
-                <SelectOpciones
-                  id="boleta-estado"
-                  value={estadoPago}
-                  onValueChange={setEstadoPago}
-                  opciones={ESTADOS_PAGO}
-                  placeholder="Selecciona un estado"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="boleta-metodo">Método de Pago</Label>
-                <SelectOpciones
-                  id="boleta-metodo"
-                  value={metodoPago}
-                  onValueChange={setMetodoPago}
-                  opciones={METODOS_PAGO}
-                  placeholder="Selecciona un método"
-                />
-              </div>
-            </div>
-
-            {error && <p className="text-sm text-destructive">{error}</p>}
-
-            <Button type="submit" className="w-full rounded-full" disabled={guardando}>
-              {guardando && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-              Guardar Boleta
-            </Button>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {dialogAbierto && (
+        <NuevaBoletaDialog
+          duenos={duenos}
+          pacientes={pacientes}
+          citas={citas}
+          onClose={() => setDialogAbierto(false)}
+          onCreada={(registrada) => {
+            setBoletas((prev) => [registrada, ...prev]);
+            setPagina(1);
+          }}
+        />
+      )}
 
       {boletaEditando && (
         <EditarBoletaDialog
