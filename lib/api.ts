@@ -465,7 +465,7 @@ export async function crearCita(datos: {
   idDueno: number;
   estado?: string;
 }): Promise<Cita> {
-  const creada = await request<CitaBackend>("/citas", {
+ const creada = await request<CitaBackend>(`/citas/${NEGOCIO_ID}`, {
     method: "POST",
     body: JSON.stringify({
       fecha_hora: construirFechaHoraParaBackend(datos.fecha, datos.hora),

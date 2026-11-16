@@ -1,19 +1,88 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
 
 import { PacienteDetalle } from "@/components/pacientes/paciente-detalle";
 import { listarCitas, listarDuenos, listarHistorialVacunas, listarPacientes, obtenerPaciente } from "@/lib/api";
-import type { Paciente } from "@/lib/types";
+import type { Dueno, Paciente, RegistroVacuna } from "@/lib/types";
 
-export default async function PacienteDetallePage({ params }: { params: { id: string } }) {
-  let paciente: Paciente | null = null;
+type Datos = {
+  paciente: Paciente;
+  duenos: Dueno[];
+  otrosPacientes: Paciente[];
+  ultimaVisita?: string;
+  vacunas: RegistroVacuna[];
+};
 
-  try {
-    paciente = await obtenerPaciente(params.id);
-  } catch (err) {
-    console.error("Error al cargar el paciente:", err);
+// componente de cliente: el token de sesion solo existe en el navegador
+export default function PacienteDetallePage({ params }: { params: { id: string } }) {
+  const [datos, setDatos] = useState<Datos | null>(null);
+  const [cargando, setCargando] = useState(true);
+
+  useEffect(() => {
+    let activo = true;
+
+    async function cargarDatos() {
+      let paciente: Paciente | null = null;
+      try {
+        paciente = await obtenerPaciente(params.id);
+      } catch (err) {
+        console.error("Error al cargar el paciente:", err);
+      }
+
+      if (!paciente) {
+        if (!activo) return;
+        setDatos(null);
+        setCargando(false);
+        return;
+      }
+      const actual = paciente;
+
+      const [resDuenos, resPacientes, resCitas, resVacunas] = await Promise.allSettled([
+        listarDuenos(),
+        listarPacientes(),
+        listarCitas(),
+        listarHistorialVacunas(actual.id),
+      ]);
+
+      const otrosPacientes =
+        resPacientes.status === "fulfilled" && actual.duenoId
+          ? resPacientes.value.filter((p) => p.duenoId === actual.duenoId && p.id !== actual.id)
+          : [];
+
+      let ultimaVisita: string | undefined;
+      if (resCitas.status === "fulfilled") {
+        const hoy = new Date().toISOString().slice(0, 10);
+        ultimaVisita = resCitas.value
+          .filter((c) => c.mascotaId === actual.id && c.fecha <= hoy && c.estado !== "Cancelada")
+          .map((c) => c.fecha)
+          .sort()
+          .pop();
+      }
+
+      if (!activo) return;
+      setDatos({
+        paciente: actual,
+        duenos: resDuenos.status === "fulfilled" ? resDuenos.value : [],
+        otrosPacientes,
+        ultimaVisita,
+        vacunas: resVacunas.status === "fulfilled" ? resVacunas.value : [],
+      });
+      setCargando(false);
+    }
+
+    void cargarDatos();
+    return () => {
+      activo = false;
+    };
+  }, [params.id]);
+
+  if (cargando) {
+    return <p className="text-sm text-muted-foreground">Cargando paciente...</p>;
   }
 
-  if (!paciente) {
+  if (!datos) {
     return (
       <div className="space-y-3">
         <p className="text-sm text-destructive">No se pudo cargar el paciente.</p>
@@ -24,38 +93,13 @@ export default async function PacienteDetallePage({ params }: { params: { id: st
     );
   }
 
-  const [resDuenos, resPacientes, resCitas, resVacunas] = await Promise.allSettled([
-    listarDuenos(),
-    listarPacientes(),
-    listarCitas(),
-    listarHistorialVacunas(paciente.id),
-  ]);
-
-  const duenos = resDuenos.status === "fulfilled" ? resDuenos.value : [];
-  const vacunas = resVacunas.status === "fulfilled" ? resVacunas.value : [];
-
-  const otrosPacientes =
-    resPacientes.status === "fulfilled" && paciente.duenoId
-      ? resPacientes.value.filter((p) => p.duenoId === paciente!.duenoId && p.id !== paciente!.id)
-      : [];
-
-  let ultimaVisita: string | undefined;
-  if (resCitas.status === "fulfilled") {
-    const hoy = new Date().toISOString().slice(0, 10);
-    ultimaVisita = resCitas.value
-      .filter((c) => c.mascotaId === paciente!.id && c.fecha <= hoy && c.estado !== "Cancelada")
-      .map((c) => c.fecha)
-      .sort()
-      .pop();
-  }
-
   return (
     <PacienteDetalle
-      paciente={paciente}
-      duenos={duenos}
-      otrosPacientes={otrosPacientes}
-      ultimaVisita={ultimaVisita}
-      vacunas={vacunas}
+      paciente={datos.paciente}
+      duenos={datos.duenos}
+      otrosPacientes={datos.otrosPacientes}
+      ultimaVisita={datos.ultimaVisita}
+      vacunas={datos.vacunas}
     />
   );
 }
