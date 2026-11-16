@@ -142,5 +142,5 @@ export type ItemBoleta = {
   concepto: string;
   precio: string;
   incluido: boolean;
-  origen: "vacuna" | "manual";
+  origen: "vacuna" | "manual" | "receta";
 };

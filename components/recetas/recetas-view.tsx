@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { RecetaEditor } from "@/components/recetas/receta-editor";
 import { RecetaInicio } from "@/components/recetas/receta-inicio";
 import { RecetaSelector } from "@/components/recetas/receta-selector";
-import { hoyLocalISO } from "@/lib/fechas";
+import { crearReceta } from "@/lib/api";
+import { mensajeParaUsuario } from "@/lib/errors";
+import { logError } from "@/lib/logger";
 import type { Cita, MedicamentoReceta, OrigenReceta, Paciente, PlantillaReceta, RecetaCreada } from "@/lib/types";
 
 type Paso =
@@ -13,32 +15,59 @@ type Paso =
   | { tipo: "seleccion"; origen: OrigenReceta }
   | { tipo: "editor"; origen: OrigenReceta; paciente?: Paciente; cita?: Cita };
 
-export function RecetasView({ pacientes, citas }: { pacientes: Paciente[]; citas: Cita[] }) {
+export function RecetasView({
+  pacientes,
+  citas,
+  recetasIniciales = [],
+}: {
+  pacientes: Paciente[];
+  citas: Cita[];
+  recetasIniciales?: RecetaCreada[];
+}) {
   const [paso, setPaso] = useState<Paso>({ tipo: "inicio" });
-  const [recetas, setRecetas] = useState<RecetaCreada[]>([]);
+  const [recetas, setRecetas] = useState<RecetaCreada[]>(recetasIniciales);
+  const [errorGuardar, setErrorGuardar] = useState<string | null>(null);
+  const [guardando, setGuardando] = useState(false);
+
+  useEffect(() => {
+    setRecetas(recetasIniciales);
+  }, [recetasIniciales]);
   const [plantillas, setPlantillas] = useState<PlantillaReceta[]>([]);
 
-  function guardar(medicamentos: MedicamentoReceta[], recomendaciones: string) {
+  async function guardar(medicamentos: MedicamentoReceta[], recomendaciones: string) {
     if (paso.tipo !== "editor") return;
     const { origen, paciente, cita } = paso;
 
-    setRecetas((prev) => [
-      {
-        id: `${Date.now()}`,
+    const idMascota = paciente?.id ?? cita?.mascotaId;
+    if (!idMascota) {
+      setErrorGuardar("No se pudo identificar la mascota de esta receta.");
+      return;
+    }
+
+    setGuardando(true);
+    setErrorGuardar(null);
+    try {
+      const creada = await crearReceta({
+        idMascota,
         origen,
-        pacienteId: paciente?.id ?? cita?.mascotaId ?? "",
-        pacienteNombre: paciente?.nombre ?? cita?.mascotaNombre ?? "—",
         citaId: cita?.id,
         citaFecha: cita?.fecha,
         citaHora: cita?.hora,
         citaMotivo: cita?.motivo,
         medicamentos,
         recomendaciones,
-        fecha: hoyLocalISO(),
-      },
-      ...prev,
-    ]);
-    setPaso({ tipo: "inicio" });
+      });
+      setRecetas((prev) => [
+        { ...creada, pacienteNombre: paciente?.nombre ?? cita?.mascotaNombre ?? creada.pacienteNombre },
+        ...prev,
+      ]);
+      setPaso({ tipo: "inicio" });
+    } catch (err) {
+      logError("Error al guardar la receta", err, { idMascota });
+      setErrorGuardar(mensajeParaUsuario(err, "No se pudo guardar la receta."));
+    } finally {
+      setGuardando(false);
+    }
   }
 
   if (paso.tipo === "seleccion") {
@@ -72,6 +101,8 @@ export function RecetasView({ pacientes, citas }: { pacientes: Paciente[]; citas
         onEliminarPlantilla={(id) => setPlantillas((prev) => prev.filter((p) => p.id !== id))}
         onVolver={() => setPaso({ tipo: "seleccion", origen: paso.origen })}
         onGuardar={guardar}
+        guardando={guardando}
+        error={errorGuardar}
       />
     );
   }

@@ -70,11 +70,16 @@ export function NuevoPacienteForm() {
 
   const nombreEspecie = especie.trim();
 
+ const raza = datos.mascotaRaza?.trim();
   const color = datos.mascotaColor?.trim();
   const motivo = datos.motivoIngreso?.trim();
 
   if (!nombreEspecie) {
     setError("Debes seleccionar una especie.");
+    return;
+  }
+  if (!raza) {
+    setError("Ingresa la raza de la mascota.");
     return;
   }
 
@@ -89,6 +94,7 @@ export function NuevoPacienteForm() {
     await crearPaciente({
       nombre: datos.mascotaNombre,
       especie: nombreEspecie,
+      raza,  
 
       idEspecie,
       sexo,
@@ -240,7 +246,10 @@ export function NuevoPacienteForm() {
                     </SelectContent>
                   </Select>
                 </div>
-
+                <div className="space-y-2">
+                  <Label htmlFor="mascota-raza">Raza *</Label>
+                  <Input id="mascota-raza" name="mascotaRaza" placeholder="Ej: Labrador, Siamés, Mestizo" required />
+                </div>
                 <div className="space-y-2">
                   <Label>Sexo y Esterilización *</Label>
                   <Select value={sexo} onValueChange={setSexo}>

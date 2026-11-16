@@ -28,6 +28,8 @@ export function RecetaEditor({
   onEliminarPlantilla,
   onVolver,
   onGuardar,
+  guardando = false,
+  error = null,
 }: {
   paciente?: Paciente;
   cita?: Cita;
@@ -36,6 +38,8 @@ export function RecetaEditor({
   onEliminarPlantilla: (id: string) => void;
   onVolver: () => void;
   onGuardar: (medicamentos: MedicamentoReceta[], recomendaciones: string) => void;
+  guardando?: boolean;
+  error?: string | null;
 }) {
   const [medicamentos, setMedicamentos] = useState<MedicamentoReceta[]>([]);
   const [recomendaciones, setRecomendaciones] = useState("");
@@ -131,13 +135,15 @@ export function RecetaEditor({
           <Button
             className="rounded-full"
             onClick={() => onGuardar(medicamentos, recomendaciones.trim())}
-            disabled={medicamentos.length === 0}
+            disabled={medicamentos.length === 0 || guardando}
           >
             <Save className="mr-1.5 h-4 w-4" />
-            Guardar receta
+            {guardando ? "Guardando..." : "Guardar receta"}
           </Button>
         </div>
       </div>
+
+      {error && <p className="text-sm text-destructive">{error}</p>}
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)]">
         <div className="space-y-6">

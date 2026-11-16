@@ -3,12 +3,13 @@
 import { useEffect, useState } from "react";
 
 import { RecetasView } from "@/components/recetas/recetas-view";
-import { listarCitas, listarPacientes } from "@/lib/api";
-import type { Cita, Paciente } from "@/lib/types";
+import { listarCitas, listarPacientes, listarRecetas } from "@/lib/api";
+import type { Cita, Paciente, RecetaCreada } from "@/lib/types";
 
 export default function RecetasPage() {
   const [pacientes, setPacientes] = useState<Paciente[]>([]);
   const [citas, setCitas] = useState<Cita[]>([]);
+  const [recetas, setRecetas] = useState<RecetaCreada[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(false);
 
@@ -16,7 +17,11 @@ export default function RecetasPage() {
     let activo = true;
 
     async function cargarDatos() {
-      const [resPacientes, resCitas] = await Promise.allSettled([listarPacientes(), listarCitas()]);
+      const [resPacientes, resCitas, resRecetas] = await Promise.allSettled([
+        listarPacientes(),
+        listarCitas(),
+        listarRecetas(),
+      ]);
 
       if (!activo) return;
 
@@ -31,6 +36,13 @@ export default function RecetasPage() {
         setCitas(resCitas.value);
       } else {
         console.error("Error al cargar citas:", resCitas.reason);
+        setError(true);
+      }
+
+      if (resRecetas.status === "fulfilled") {
+        setRecetas(resRecetas.value);
+      } else {
+        console.error("Error al cargar recetas:", resRecetas.reason);
         setError(true);
       }
 
@@ -55,7 +67,7 @@ export default function RecetasPage() {
           No se pudieron cargar todos los datos. Revisa que el backend esté corriendo y que tu sesión siga activa.
         </p>
       )}
-      <RecetasView pacientes={pacientes} citas={citas} />
+      <RecetasView pacientes={pacientes} citas={citas} recetasIniciales={recetas} />
     </div>
   );
 }

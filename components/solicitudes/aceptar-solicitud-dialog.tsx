@@ -31,6 +31,7 @@ export function AceptarSolicitudDialog({
 }) {
   const [nombre, setNombre] = useState(solicitud.mascota);
   const [especie, setEspecie] = useState("perro");
+  const [raza, setRaza] = useState("");
   const [sexo, setSexo] = useState("macho");
   const [peso, setPeso] = useState("");
   const [guardando, setGuardando] = useState(false);
@@ -42,6 +43,10 @@ export function AceptarSolicitudDialog({
     const pesoNumero = Number(peso);
     if (!nombre.trim()) {
       setError("Ponle un nombre a la mascota.");
+      return;
+    }
+    if (!raza.trim()) {
+      setError("Ingresa la raza de la mascota.");
       return;
     }
     if (peso === "" || Number.isNaN(pesoNumero) || pesoNumero < 0) {
@@ -67,6 +72,7 @@ export function AceptarSolicitudDialog({
       await crearPaciente({
         nombre: nombre.trim(),
         especie,
+        raza: raza.trim(),
         idEspecie,
         sexo,
         pesoKg: pesoNumero,
@@ -123,6 +129,16 @@ export function AceptarSolicitudDialog({
                 required
               />
             </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="aceptar-raza">Raza *</Label>
+            <Input
+              id="aceptar-raza"
+              value={raza}
+              onChange={(e) => setRaza(e.target.value)}
+              placeholder="Ej: Labrador, Siamés, Mestizo"
+              required
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="aceptar-sexo">Sexo y esterilización *</Label>

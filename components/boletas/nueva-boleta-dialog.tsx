@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, Plus, RotateCcw, Syringe, Trash2 } from "lucide-react";
+import { Loader2, Pill, Plus, RotateCcw, Syringe, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,12 +16,12 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SelectOpciones } from "@/components/shared/select-opciones";
 import { ESTADOS_PAGO, ESTADO_PAGO_INICIAL, METODOS_PAGO } from "@/lib/constants";
-import { crearBoleta, listarHistorialVacunas } from "@/lib/api";
+import { crearBoleta, listarHistorialVacunas, listarRecetas } from "@/lib/api";
 import { fechaLocalDeInstante, formatearFechaCorta, hoyLocalISO } from "@/lib/fechas";
 import { mensajeParaUsuario } from "@/lib/errors";
 import { logError, logInfo } from "@/lib/logger";
 import { formatearPeso } from "@/lib/utils";
-import type { Boleta, Cita, Dueno, ItemBoleta, Paciente, RegistroVacuna } from "@/lib/types";
+import type { Boleta, Cita, Dueno, ItemBoleta, Paciente, RecetaCreada, RegistroVacuna } from "@/lib/types";
 
 function precioNumero(valor: string): number {
   const n = Number(valor);
@@ -30,6 +30,22 @@ function precioNumero(valor: string): number {
 
 function incluirPorDefecto(r: RegistroVacuna, fechaReferencia: string): boolean {
   return fechaLocalDeInstante(r.fechaAplicacion) === fechaReferencia;
+}
+
+// los medicamentos de una receta se marcan si la receta es de la cita elegida o del dia de referencia
+function incluirRecetaPorDefecto(r: RecetaCreada, citaId: string, fechaReferencia: string): boolean {
+  if (citaId && r.citaId === citaId) return true;
+  return r.fecha === fechaReferencia;
+}
+
+function itemsDeReceta(r: RecetaCreada, citaId: string, fechaReferencia: string): ItemBoleta[] {
+  return r.medicamentos.map<ItemBoleta>((m, idx) => ({
+    uid: `receta-${r.id}::${idx}`,
+    concepto: `${m.nombre} · receta del ${formatearFechaCorta(r.fecha)}`,
+    precio: String(m.precio),
+    incluido: incluirRecetaPorDefecto(r, citaId, fechaReferencia),
+    origen: "receta",
+  }));
 }
 
 export function NuevaBoletaDialog({
@@ -50,6 +66,7 @@ export function NuevaBoletaDialog({
   const [citaId, setCitaId] = useState("");
   const [items, setItems] = useState<ItemBoleta[]>([]);
   const [registros, setRegistros] = useState<RegistroVacuna[]>([]);
+  const [recetas, setRecetas] = useState<RecetaCreada[]>([]);
   const [cargandoVacunas, setCargandoVacunas] = useState(false);
   const [totalManual, setTotalManual] = useState<string | null>(null);
   const [estadoPago, setEstadoPago] = useState(ESTADO_PAGO_INICIAL);
@@ -70,31 +87,60 @@ export function NuevaBoletaDialog({
   useEffect(() => {
     if (!pacienteId) {
       setRegistros([]);
+      setRecetas([]);
       setItems([]);
       return;
     }
     let activo = true;
     setCargandoVacunas(true);
-    listarHistorialVacunas(pacienteId)
-      .then((lista) => {
+
+    // vacunas y recetas se piden juntas, si una falla la otra igual se muestra
+    Promise.allSettled([listarHistorialVacunas(pacienteId), listarRecetas()])
+      .then(([resVacunas, resRecetas]) => {
         if (!activo) return;
-        setRegistros(lista);
+
+        const listaVacunas = resVacunas.status === "fulfilled" ? resVacunas.value : [];
+        const listaRecetas =
+          resRecetas.status === "fulfilled" ? resRecetas.value.filter((r) => r.pacienteId === pacienteId) : [];
+
+        setRegistros(listaVacunas);
+        setRecetas(listaRecetas);
+
+        const hoy = hoyLocalISO();
         setItems((prev) => [
-          ...lista.map<ItemBoleta>((r) => ({
+          ...listaVacunas.map<ItemBoleta>((r) => ({
             uid: `vacuna-${r.id}`,
             concepto: `${r.vacunaNombre} · aplicada el ${formatearFechaCorta(fechaLocalDeInstante(r.fechaAplicacion))}`,
             precio: String(r.precio),
-            incluido: incluirPorDefecto(r, hoyLocalISO()),
+            incluido: incluirPorDefecto(r, hoy),
             origen: "vacuna",
           })),
+          ...listaRecetas.flatMap((r) => itemsDeReceta(r, "", hoy)),
           ...prev.filter((i) => i.origen === "manual"),
         ]);
-      })
-      .catch((err) => {
-        logError("no se pudieron cargar las vacunas de la mascota para la boleta", err, { idMascota: pacienteId });
-        if (!activo) return;
-        setRegistros([]);
-        setError(mensajeParaUsuario(err, "no pudimos traer las vacunas de la mascota, igual puedes agregar los cobros a mano"));
+
+        if (resVacunas.status === "rejected") {
+          logError("no se pudieron cargar las vacunas de la mascota para la boleta", resVacunas.reason, {
+            idMascota: pacienteId,
+          });
+          setError(
+            mensajeParaUsuario(
+              resVacunas.reason,
+              "no pudimos traer las vacunas de la mascota, igual puedes agregar los cobros a mano",
+            ),
+          );
+        }
+        if (resRecetas.status === "rejected") {
+          logError("no se pudieron cargar las recetas de la mascota para la boleta", resRecetas.reason, {
+            idMascota: pacienteId,
+          });
+          setError(
+            mensajeParaUsuario(
+              resRecetas.reason,
+              "no pudimos traer las recetas de la mascota, igual puedes agregar los cobros a mano",
+            ),
+          );
+        }
       })
       .finally(() => {
         if (activo) setCargandoVacunas(false);
@@ -127,9 +173,15 @@ export function NuevaBoletaDialog({
     const referencia = cita ? cita.fecha : hoyLocalISO();
     setItems((prev) =>
       prev.map((i) => {
-        if (i.origen !== "vacuna") return i;
-        const registro = registros.find((r) => `vacuna-${r.id}` === i.uid);
-        return registro ? { ...i, incluido: incluirPorDefecto(registro, referencia) } : i;
+        if (i.origen === "vacuna") {
+          const registro = registros.find((r) => `vacuna-${r.id}` === i.uid);
+          return registro ? { ...i, incluido: incluirPorDefecto(registro, referencia) } : i;
+        }
+        if (i.origen === "receta") {
+          const receta = recetas.find((r) => i.uid.startsWith(`receta-${r.id}::`));
+          return receta ? { ...i, incluido: incluirRecetaPorDefecto(receta, id, referencia) } : i;
+        }
+        return i;
       }),
     );
     setTotalManual(null);
@@ -207,7 +259,7 @@ export function NuevaBoletaDialog({
         <DialogHeader>
           <DialogTitle>Nueva Boleta</DialogTitle>
           <DialogDescription>
-            Elige dueño y mascota: los cobros de sus vacunas se cargan solos y puedes ajustarlos.
+            Elige dueño y mascota: los cobros de sus vacunas y recetas se cargan solos y puedes ajustarlos.
           </DialogDescription>
         </DialogHeader>
 
@@ -299,11 +351,11 @@ export function NuevaBoletaDialog({
               {cargandoVacunas ? (
                 <p className="flex items-center gap-2 text-xs text-muted-foreground">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Cargando vacunas...
+                  Cargando vacunas y recetas...
                 </p>
               ) : items.length === 0 ? (
                 <p className="text-xs text-muted-foreground">
-                  Esta mascota no tiene vacunas registradas. Agrega un concepto para cobrar.
+                  Esta mascota no tiene vacunas ni recetas registradas. Agrega un concepto para cobrar.
                 </p>
               ) : (
                 <ul className="space-y-2">
@@ -316,9 +368,13 @@ export function NuevaBoletaDialog({
                         className="h-4 w-4 shrink-0 accent-primary"
                         aria-label="Incluir en la boleta"
                       />
-                      {i.origen === "vacuna" ? (
+                      {i.origen !== "manual" ? (
                         <span className="flex min-w-0 flex-1 items-center gap-1.5 text-xs">
-                          <Syringe className="h-3.5 w-3.5 shrink-0 text-primary" />
+                          {i.origen === "receta" ? (
+                            <Pill className="h-3.5 w-3.5 shrink-0 text-primary" />
+                          ) : (
+                            <Syringe className="h-3.5 w-3.5 shrink-0 text-primary" />
+                          )}
                           <span className="truncate">{i.concepto}</span>
                         </span>
                       ) : (
@@ -355,8 +411,8 @@ export function NuevaBoletaDialog({
               )}
 
               <p className="text-xs text-muted-foreground">
-                Se marcan las vacunas aplicadas {citaSeleccionada ? "el día de la cita" : "hoy"}. Puedes marcar otras o
-                cambiar cualquier precio.
+                Se marcan las vacunas aplicadas y las recetas de {citaSeleccionada ? "el día de la cita" : "hoy"}. Puedes marcar
+                otras o cambiar cualquier precio.
               </p>
             </div>
           )}

@@ -1,5 +1,16 @@
 import { API_URL, NEGOCIO_ID } from "@/lib/config";
-import type { Paciente, Dueno, Solicitud, Cita, Boleta, Vacuna, RegistroVacuna } from "@/lib/types";
+import type {
+  Paciente,
+  Dueno,
+  Solicitud,
+  Cita,
+  Boleta,
+  Vacuna,
+  RegistroVacuna,
+  RecetaCreada,
+  MedicamentoReceta,
+  OrigenReceta,
+} from "@/lib/types";
 import { ApiError, extraerMensajeBackend, pistaParaError } from "@/lib/errors";
 import { logApiFallo, logApiOk, logInfo, logWarn } from "@/lib/logger";
 import { aFechaBackend } from "@/lib/fechas";
@@ -181,7 +192,7 @@ function normalizarTexto(valor: string): string {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
-// la raza es texto libre (se manda como string), solo la especie se busca por id
+// la raza es texto libre que escribe el cliente (se manda como string), solo la especie se busca por id
 export async function buscarIdEspecie(nombreEspecie: string): Promise<number> {
   const especies = await listarEspecies();
 
@@ -254,6 +265,7 @@ export async function listarPacientes(): Promise<Paciente[]> {
 export async function crearPaciente(datos: {
   nombre: string;
   especie: string;
+  raza: string;
   idEspecie: number;
   sexo: string;
   fechaNacimiento?: string;
@@ -268,9 +280,7 @@ export async function crearPaciente(datos: {
     method: "POST",
     body: JSON.stringify({
       nombre: datos.nombre,
-
-
-
+      raza: datos.raza,
       id_especie: {
         id_especie: datos.idEspecie,
       },
@@ -443,7 +453,7 @@ function construirFechaHoraParaBackend(
 }
 
 export async function listarCitas(): Promise<Cita[]> {
-  const data = await request<CitaBackend[]>("/citas/todas");
+  const data = await request<CitaBackend[]>(`/citas/todas?negocioId=${NEGOCIO_ID}`);
   return data.map(mapCita);
 }
 
@@ -595,6 +605,7 @@ export async function actualizarPaciente(
   validarId(id, "el paciente");
   const body: Record<string, unknown> = {};
   if (cambios.nombre !== undefined) body.nombre = cambios.nombre;
+  if (cambios.raza !== undefined) body.raza = cambios.raza;
   if (cambios.idEspecie !== undefined) body.id_especie = { id_especie: cambios.idEspecie };
   if (cambios.sexo !== undefined) body.sexo = cambios.sexo;
   if (cambios.fechaNacimiento !== undefined) body.fecha_nacimiento = cambios.fechaNacimiento;
@@ -691,9 +702,18 @@ export async function crearVacuna(datos: {
 // el back tira 404 cuando la mascota no tiene nada, aqui eso es lista vacia
 export async function listarHistorialVacunas(idMascota: string): Promise<RegistroVacuna[]> {
   try {
-    const data = await request<HistorialVacunaBackend[]>(
+    const { texto } = await ejecutar(
       `/historial-vacunas?negocioId=${NEGOCIO_ID}&id_mascota=${idMascota}`,
     );
+    // si la mascota no tiene vacunas el back puede devolver un texto ("no hay historial...") en vez de un array
+    let data: HistorialVacunaBackend[];
+    try {
+      const parseado: unknown = JSON.parse(texto);
+      if (!Array.isArray(parseado)) return [];
+      data = parseado as HistorialVacunaBackend[];
+    } catch {
+      return [];
+    }
     return data
       .map(mapRegistroVacuna)
       .sort((a, b) => b.fechaAplicacion.localeCompare(a.fechaAplicacion));
@@ -739,4 +759,83 @@ export async function actualizarRegistroVacuna(
       observaciones: datos.observaciones,
     }),
   });
+}
+
+
+// ---------- recetas ----------
+// el back guarda la receta como un solo texto (medicamentos_indicaciones),
+// asi que mandamos un json con todo y lo leemos de vuelta al listar
+type RecetaBackend = {
+  id_receta: number;
+  fecha: string;
+  medicamentos_indicaciones: string;
+  mascota?: { id_mascota: number; nombre: string } | null;
+};
+
+type ContenidoReceta = {
+  origen?: OrigenReceta;
+  citaId?: string;
+  citaFecha?: string;
+  citaHora?: string;
+  citaMotivo?: string;
+  medicamentos?: MedicamentoReceta[];
+  recomendaciones?: string;
+};
+
+function mapReceta(r: RecetaBackend): RecetaCreada {
+  let contenido: ContenidoReceta = {};
+  try {
+    const parseado: unknown = JSON.parse(r.medicamentos_indicaciones);
+    if (parseado && typeof parseado === "object") contenido = parseado as ContenidoReceta;
+  } catch {
+    // receta vieja o escrita como texto plano: la mostramos como recomendaciones
+    contenido = { recomendaciones: r.medicamentos_indicaciones };
+  }
+
+  return {
+    id: String(r.id_receta),
+    origen: contenido.origen ?? "paciente",
+    pacienteId: r.mascota?.id_mascota != null ? String(r.mascota.id_mascota) : "",
+    pacienteNombre: r.mascota?.nombre ?? "—",
+    citaId: contenido.citaId,
+    citaFecha: contenido.citaFecha,
+    citaHora: contenido.citaHora,
+    citaMotivo: contenido.citaMotivo,
+    medicamentos: contenido.medicamentos ?? [],
+    recomendaciones: contenido.recomendaciones ?? "",
+    fecha: r.fecha ? DateTime.fromISO(r.fecha).toISODate() ?? r.fecha.slice(0, 10) : "",
+  };
+}
+
+export async function listarRecetas(): Promise<RecetaCreada[]> {
+  const data = await request<RecetaBackend[]>(`/recetas-medicas?negocioId=${NEGOCIO_ID}`);
+  return (data ?? []).map(mapReceta);
+}
+
+export async function crearReceta(datos: {
+  idMascota: string;
+  origen: OrigenReceta;
+  citaId?: string;
+  citaFecha?: string;
+  citaHora?: string;
+  citaMotivo?: string;
+  medicamentos: MedicamentoReceta[];
+  recomendaciones: string;
+}): Promise<RecetaCreada> {
+  validarId(datos.idMascota, "la mascota de la receta");
+  const contenido: ContenidoReceta = {
+    origen: datos.origen,
+    citaId: datos.citaId,
+    citaFecha: datos.citaFecha,
+    citaHora: datos.citaHora,
+    citaMotivo: datos.citaMotivo,
+    medicamentos: datos.medicamentos,
+    recomendaciones: datos.recomendaciones,
+  };
+
+  const creada = await request<RecetaBackend>(`/recetas-medicas/${datos.idMascota}`, {
+    method: "POST",
+    body: JSON.stringify({ medicamentos_indicaciones: JSON.stringify(contenido) }),
+  });
+  return mapReceta(creada);
 }
