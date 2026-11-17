@@ -91,6 +91,7 @@ export function EmergencyForm() {
         correo: datos.correo,
         direccion: datos.direccion,
         motivo: datos.motivo,
+        aceptado:aceptaTerminos&&aceptaPrivacidad
       });
       setEnviado(true);
       setModalAbierto(false);

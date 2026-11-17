@@ -349,12 +349,15 @@ export async function crearSolicitud(datos: {
   correo: string;
   direccion: string;
   motivo: string;
+  aceptado:boolean;
 }): Promise<Solicitud> {
+
   const creada = await request<ContactoBackend>(`/contacto-emergencia/negocio/${NEGOCIO_ID}`, {
     method: "POST",
     body: JSON.stringify({
       razon_consulta: datos.motivo,
       nom_mascota: datos.mascota,
+      aceptado:datos.aceptado,
       dueno: {
         rut: datos.rut,
         nombre_completo: datos.nombreDueno,
@@ -751,7 +754,7 @@ export async function actualizarCita(
   cambios: { estado?: string; motivo?: string },
 ): Promise<void> {
   validarId(id, "la cita");
-  await requestSinRespuesta(`/citas/${id}`, {
+  await requestSinRespuesta(`/citas/${NEGOCIO_ID}/${id}`, {
     method: "PATCH",
     body: JSON.stringify(cambios),
   });
