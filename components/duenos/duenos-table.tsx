@@ -3,11 +3,13 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { IdCard, Mail, MapPin, Pencil, Phone } from "lucide-react";
+import { IdCard, Mail, MapPin, Pencil, Phone, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { EditarDuenoDialog } from "@/components/duenos/editar-dueno-dialog";
-import type { Dueno } from "@/lib/types";
+import { ConfirmarEliminarDialog } from "@/components/shared/confirmar-eliminar-dialog";
+import { eliminarDuenoConMascotas } from "@/lib/api";
+import type { Dueno, Paciente } from "@/lib/types";
 
 export function iniciales(nombre: string): string {
   return (
@@ -43,10 +45,18 @@ export function DatosContacto({ dueno }: { dueno: Dueno }) {
   );
 }
 
-export function DuenosTable({ duenos: duenosIniciales }: { duenos: Dueno[] }) {
+export function DuenosTable({
+  duenos: duenosIniciales,
+  pacientes = [],
+}: {
+  duenos: Dueno[];
+  pacientes?: Paciente[];
+}) {
   const router = useRouter();
   const [duenos, setDuenos] = useState<Dueno[]>(duenosIniciales);
   const [editando, setEditando] = useState<Dueno | null>(null);
+  const [eliminando, setEliminando] = useState<Dueno | null>(null);
+  const mascotasDelEliminado = eliminando ? pacientes.filter((p) => p.duenoId === eliminando.id) : [];
 
   useEffect(() => {
     setDuenos(duenosIniciales);
@@ -77,7 +87,18 @@ export function DuenosTable({ duenos: duenosIniciales }: { duenos: Dueno[] }) {
               <DatosContacto dueno={d} />
             </div>
 
-            <div className="relative z-10 flex justify-end">
+            <div className="relative z-10 flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="rounded-full text-destructive hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
+                onClick={() => setEliminando(d)}
+                aria-label={`Eliminar a ${d.nombre}`}
+              >
+                <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                Eliminar
+              </Button>
               <Button
                 type="button"
                 variant="outline"
@@ -93,6 +114,32 @@ export function DuenosTable({ duenos: duenosIniciales }: { duenos: Dueno[] }) {
           </div>
         ))}
       </div>
+
+      {eliminando && (
+        <ConfirmarEliminarDialog
+          titulo="Eliminar dueño"
+          etiquetaConfirmar={mascotasDelEliminado.length > 0 ? "Eliminar dueño y mascotas" : "Eliminar dueño"}
+          onClose={() => setEliminando(null)}
+          onConfirmar={async () => {
+            await eliminarDuenoConMascotas(eliminando.id);
+            setDuenos((prev) => prev.filter((d) => d.id !== eliminando.id));
+            router.refresh();
+          }}
+        >
+          <p>
+            Se eliminará a <span className="font-semibold text-foreground">{eliminando.nombre}</span>. Esta acción no se puede deshacer.
+          </p>
+          {mascotasDelEliminado.length > 0 ? (
+            <p className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-destructive">
+              Una mascota no puede existir sin tutor, así que también se eliminarán sus{" "}
+              <span className="font-semibold">{mascotasDelEliminado.length} mascota{mascotasDelEliminado.length === 1 ? "" : "s"}</span>
+              {" "}({mascotasDelEliminado.map((m) => m.nombre).join(", ")}) y sus solicitudes de emergencia, citas, recetas, vacunas y exámenes. Las boletas se conservan.
+            </p>
+          ) : (
+            <p>Este dueño no tiene mascotas registradas. También se borrarán sus solicitudes de emergencia y citas. Las boletas se conservan.</p>
+          )}
+        </ConfirmarEliminarDialog>
+      )}
 
       {editando && (
         <EditarDuenoDialog

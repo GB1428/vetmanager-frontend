@@ -7,12 +7,14 @@ import { User, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/empty-state";
 import { DuenosTable } from "@/components/duenos/duenos-table";
-import { listarDuenos } from "@/lib/api";
+import { listarDuenos, listarPacientes } from "@/lib/api";
+import type { Paciente } from "@/lib/types";
 
 type Dueno = Awaited<ReturnType<typeof listarDuenos>>[number];
 
 export default function DuenosPage() {
   const [duenos, setDuenos] = useState<Dueno[]>([]);
+  const [pacientes, setPacientes] = useState<Paciente[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(false);
 
@@ -21,10 +23,15 @@ export default function DuenosPage() {
 
     async function cargarDuenos() {
       try {
-        const resultado = await listarDuenos();
+        const [resultado, resPacientes] = await Promise.all([
+          listarDuenos(),
+          // las mascotas solo sirven para avisar cuantas se borran con el dueño, si falla no importa
+          listarPacientes().catch(() => [] as Paciente[]),
+        ]);
 
         if (activo) {
           setDuenos(resultado);
+          setPacientes(resPacientes);
         }
       } catch (err) {
         console.error("Error al cargar dueños:", err);
@@ -81,7 +88,7 @@ export default function DuenosPage() {
           actionHref="/dashboard/duenos/nuevo"
         />
       ) : (
-        <DuenosTable duenos={duenos} />
+        <DuenosTable duenos={duenos} pacientes={pacientes} />
       )}
     </div>
   );

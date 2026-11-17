@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { FileText } from "lucide-react";
+import { FileText, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -25,23 +25,29 @@ export function SubirExamenDialog({
   archivos: File[];
   pacientes: Paciente[];
   onClose: () => void;
-  onConfirmar: (datos: { pacienteId: string; categoria: CategoriaExamen }) => void;
+  // devuelve un mensaje de error, o null si todo salio bien
+  onConfirmar: (datos: { pacienteId: string; categoria: CategoriaExamen }) => Promise<string | null>;
 }) {
   const [pacienteId, setPacienteId] = useState("");
   const [categoria, setCategoria] = useState<string>("general");
+  const [subiendo, setSubiendo] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!pacienteId) {
       setError("Selecciona un paciente.");
       return;
     }
-    onConfirmar({ pacienteId, categoria: categoria as CategoriaExamen });
+    setSubiendo(true);
+    setError(null);
+    const mensaje = await onConfirmar({ pacienteId, categoria: categoria as CategoriaExamen });
+    setSubiendo(false);
+    if (mensaje) setError(mensaje);
   }
 
   return (
-    <Dialog open onOpenChange={(abierto) => !abierto && onClose()}>
+    <Dialog open onOpenChange={(abierto) => !abierto && !subiendo && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Subir examen</DialogTitle>
@@ -66,7 +72,7 @@ export function SubirExamenDialog({
               onValueChange={setPacienteId}
               opciones={pacientes.map((p) => ({ value: p.id, label: `${p.nombre} (${p.duenoNombre})` }))}
               placeholder="Selecciona un paciente"
-              disabled={pacientes.length === 0}
+              disabled={pacientes.length === 0 || subiendo}
             />
           </div>
           <div className="space-y-2">
@@ -76,17 +82,23 @@ export function SubirExamenDialog({
               value={categoria}
               onValueChange={setCategoria}
               opciones={CATEGORIAS_EXAMEN}
+              disabled={subiendo}
             />
           </div>
+
+          <p className="text-xs text-muted-foreground">
+            Las imágenes JPG y PNG se convierten a WebP para ocupar menos espacio.
+          </p>
 
           {error && <p className="text-sm text-destructive">{error}</p>}
 
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" className="rounded-full" onClick={onClose}>
+            <Button type="button" variant="outline" className="rounded-full" onClick={onClose} disabled={subiendo}>
               Cancelar
             </Button>
-            <Button type="submit" className="rounded-full">
-              Subir
+            <Button type="submit" className="rounded-full" disabled={subiendo}>
+              {subiendo && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+              {subiendo ? "Subiendo..." : "Subir"}
             </Button>
           </div>
         </form>

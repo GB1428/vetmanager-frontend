@@ -119,6 +119,7 @@ export type Examen = {
   pacienteId: string;
   pacienteNombre: string;
   fecha: string;
+  url?: string;
 };
 
 export type OrigenReceta = "cita" | "paciente";

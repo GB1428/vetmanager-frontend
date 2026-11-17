@@ -3,10 +3,12 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Pencil } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { EditarPacienteDialog } from "@/components/pacientes/editar-paciente-dialog";
+import { ConfirmarEliminarDialog } from "@/components/shared/confirmar-eliminar-dialog";
+import { eliminarPaciente } from "@/lib/api";
 import { SEXOS, resolverOpcion } from "@/lib/constants";
 import type { Dueno, Paciente } from "@/lib/types";
 
@@ -35,6 +37,7 @@ export function PacientesTable({
   const router = useRouter();
   const [pacientes, setPacientes] = useState<Paciente[]>(pacientesIniciales);
   const [editando, setEditando] = useState<Paciente | null>(null);
+  const [eliminando, setEliminando] = useState<Paciente | null>(null);
 
   useEffect(() => {
     setPacientes(pacientesIniciales);
@@ -67,7 +70,18 @@ export function PacientesTable({
               <Dato label="Microchip" valor={p.microchip ?? "—"} />
             </div>
 
-            <div className="relative z-10 flex justify-end">
+            <div className="relative z-10 flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="rounded-full text-destructive hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
+                onClick={() => setEliminando(p)}
+                aria-label={`Eliminar a ${p.nombre}`}
+              >
+                <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                Eliminar
+              </Button>
               <Button
                 type="button"
                 variant="outline"
@@ -83,6 +97,24 @@ export function PacientesTable({
           </div>
         ))}
       </div>
+
+      {eliminando && (
+        <ConfirmarEliminarDialog
+          titulo="Eliminar paciente"
+          onClose={() => setEliminando(null)}
+          onConfirmar={async () => {
+            await eliminarPaciente(eliminando.id);
+            setPacientes((prev) => prev.filter((p) => p.id !== eliminando.id));
+            router.refresh();
+          }}
+        >
+          <p>
+            Se eliminará a <span className="font-semibold text-foreground">{eliminando.nombre}</span> y su ficha. Esta acción no se
+            puede deshacer.
+          </p>
+          <p>También se eliminarán sus citas, recetas, vacunas y exámenes. Las boletas se conservan para el registro de ingresos.</p>
+        </ConfirmarEliminarDialog>
+      )}
 
       {editando && (
         <EditarPacienteDialog

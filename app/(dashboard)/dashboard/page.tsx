@@ -1,5 +1,5 @@
-import { VistaPendiente } from "@/components/shared/vista-pendiente";
+import { InicioView } from "@/components/inicio/inicio-view";
 
 export default function DashboardPage() {
-  return <VistaPendiente titulo="Inicio" />;
+  return <InicioView />;
 }

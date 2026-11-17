@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
-import { FileImage, FileText, FlaskConical, PawPrint, Search, UploadCloud } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ExternalLink, FileImage, FileText, FlaskConical, Loader2, PawPrint, Search, UploadCloud } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,11 +9,17 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { SubirExamenDialog } from "@/components/examenes/subir-examen-dialog";
 import { CATEGORIAS_EXAMEN } from "@/lib/constants";
 import { formatearFechaCorta, hoyLocalISO } from "@/lib/fechas";
+import { listarExamenes, subirExamen } from "@/lib/api";
+import { formatearBytes, optimizarImagen } from "@/lib/imagenes";
+import { mensajeParaUsuario } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import type { CategoriaExamen, Examen, Paciente } from "@/lib/types";
 
-const TAMANO_MAXIMO = 20 * 1024 * 1024;
-const EXTENSIONES = [".pdf", ".jpg", ".jpeg", ".png"];
+// el back rechaza archivos de mas de 10MB. las imagenes se pueden elegir de hasta 25MB porque
+// se reducen al convertirlas a webp; despues de convertir se vuelve a revisar el limite de 10MB
+const TAMANO_MAXIMO_BACK = 10 * 1024 * 1024;
+const TAMANO_MAXIMO_IMAGEN_ORIGINAL = 25 * 1024 * 1024;
+const EXTENSIONES = [".pdf", ".jpg", ".jpeg", ".png", ".webp"];
 
 const ESTILO_CATEGORIA: Record<CategoriaExamen, string> = {
   sangre: "bg-emerald-100 text-emerald-700",
@@ -28,7 +34,9 @@ function etiquetaCategoria(c: CategoriaExamen): string {
 
 function esArchivoValido(a: File): boolean {
   const nombre = a.name.toLowerCase();
-  return EXTENSIONES.some((ext) => nombre.endsWith(ext)) && a.size <= TAMANO_MAXIMO;
+  if (!EXTENSIONES.some((ext) => nombre.endsWith(ext))) return false;
+  const limite = nombre.endsWith(".pdf") ? TAMANO_MAXIMO_BACK : TAMANO_MAXIMO_IMAGEN_ORIGINAL;
+  return a.size <= limite;
 }
 
 export function ExamenesView({ pacientes }: { pacientes: Paciente[] }) {
@@ -39,6 +47,24 @@ export function ExamenesView({ pacientes }: { pacientes: Paciente[] }) {
   const [arrastrando, setArrastrando] = useState(false);
   const [pendientes, setPendientes] = useState<File[]>([]);
   const [errorArchivos, setErrorArchivos] = useState<string | null>(null);
+  const [cargando, setCargando] = useState(true);
+  const [errorCarga, setErrorCarga] = useState<string | null>(null);
+
+  const cargarExamenes = useCallback(async () => {
+    try {
+      setExamenes(await listarExamenes());
+      setErrorCarga(null);
+    } catch (err) {
+      console.error("Error al cargar exámenes:", err);
+      setErrorCarga(mensajeParaUsuario(err, "No se pudieron cargar los exámenes."));
+    } finally {
+      setCargando(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void cargarExamenes();
+  }, [cargarExamenes]);
 
   const visibles = useMemo(() => {
     const termino = busqueda.trim().toLowerCase();
@@ -55,26 +81,46 @@ export function ExamenesView({ pacientes }: { pacientes: Paciente[] }) {
     const validos = archivos.filter(esArchivoValido);
 
     if (validos.length < archivos.length) {
-      setErrorArchivos("Solo se aceptan archivos PDF, JPG o PNG de hasta 20MB.");
+      setErrorArchivos("Solo se aceptan PDF (hasta 10MB) e imágenes JPG, PNG o WebP (hasta 25MB).");
     } else {
       setErrorArchivos(null);
     }
     if (validos.length > 0) setPendientes(validos);
   }
 
-  function confirmarSubida(datos: { pacienteId: string; categoria: CategoriaExamen }) {
-    const paciente = pacientes.find((p) => p.id === datos.pacienteId);
-    const nuevos: Examen[] = pendientes.map((a, i) => ({
-      id: `${Date.now()}-${i}`,
-      nombreArchivo: a.name,
-      tipoArchivo: a.name.toLowerCase().endsWith(".pdf") ? "pdf" : "imagen",
-      categoria: datos.categoria,
-      pacienteId: datos.pacienteId,
-      pacienteNombre: paciente?.nombre ?? "—",
-      fecha: hoyLocalISO(),
-    }));
-    setExamenes((prev) => [...nuevos, ...prev]);
-    setPendientes([]);
+  async function confirmarSubida(datos: { pacienteId: string; categoria: CategoriaExamen }): Promise<string | null> {
+    const fallidos: File[] = [];
+    const mensajes: string[] = [];
+    let subidos = 0;
+
+    for (const original of pendientes) {
+      try {
+        const { archivo } = await optimizarImagen(original);
+        if (archivo.size > TAMANO_MAXIMO_BACK) {
+          throw new Error(`pesa ${formatearBytes(archivo.size)} y el máximo es 10MB`);
+        }
+        await subirExamen({
+          archivo,
+          idMascota: datos.pacienteId,
+          categoria: datos.categoria,
+          fecha: hoyLocalISO(),
+        });
+        subidos += 1;
+      } catch (err) {
+        fallidos.push(original);
+        mensajes.push(`${original.name}: ${mensajeParaUsuario(err, "no se pudo subir")}`);
+      }
+    }
+
+    if (subidos > 0) await cargarExamenes();
+
+    if (fallidos.length === 0) {
+      setPendientes([]);
+      return null;
+    }
+    // quedan solo los que fallaron para poder reintentar
+    setPendientes(fallidos);
+    return mensajes.join(" · ");
   }
 
   return (
@@ -112,13 +158,13 @@ export function ExamenesView({ pacientes }: { pacientes: Paciente[] }) {
         <Button type="button" className="rounded-full" onClick={() => inputRef.current?.click()}>
           Explorar Archivos
         </Button>
-        <p className="text-xs text-muted-foreground">PDF, JPG, PNG (Max 20MB)</p>
+        <p className="text-xs text-muted-foreground">PDF (máx. 10MB), JPG, PNG o WebP. Las imágenes se convierten a WebP al subirlas.</p>
         {errorArchivos && <p className="text-sm text-destructive">{errorArchivos}</p>}
         <input
           ref={inputRef}
           type="file"
           multiple
-          accept=".pdf,.jpg,.jpeg,.png"
+          accept=".pdf,.jpg,.jpeg,.png,.webp"
           className="hidden"
           onChange={(e) => {
             recibirArchivos(e.target.files);
@@ -156,7 +202,14 @@ export function ExamenesView({ pacientes }: { pacientes: Paciente[] }) {
         </div>
       </div>
 
-      {examenes.length === 0 ? (
+      {errorCarga && <p className="text-sm text-destructive">{errorCarga}</p>}
+
+      {cargando ? (
+        <p className="flex items-center gap-2 py-10 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Cargando exámenes...
+        </p>
+      ) : examenes.length === 0 ? (
         <EmptyState
           icon={FlaskConical}
           title="Aún no hay exámenes"
@@ -181,6 +234,10 @@ export function ExamenesView({ pacientes }: { pacientes: Paciente[] }) {
                   {etiquetaCategoria(e.categoria)}
                 </span>
               </div>
+              {e.tipoArchivo === "imagen" && e.url && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={e.url} alt={e.nombreArchivo} loading="lazy" className="mt-4 h-32 w-full rounded-xl object-cover" />
+              )}
               <p className="mt-4 truncate text-sm font-semibold" title={e.nombreArchivo}>
                 {e.nombreArchivo}
               </p>
@@ -188,7 +245,20 @@ export function ExamenesView({ pacientes }: { pacientes: Paciente[] }) {
                 <PawPrint className="h-3 w-3" />
                 Paciente: {e.pacienteNombre}
               </p>
-              <p className="mt-4 border-t pt-3 text-xs text-muted-foreground">{formatearFechaCorta(e.fecha)}</p>
+              <div className="mt-4 flex items-center justify-between border-t pt-3 text-xs text-muted-foreground">
+                <span>{formatearFechaCorta(e.fecha)}</span>
+                {e.url && (
+                  <a
+                    href={e.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 font-semibold text-primary hover:underline"
+                  >
+                    Abrir
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                )}
+              </div>
             </li>
           ))}
         </ul>

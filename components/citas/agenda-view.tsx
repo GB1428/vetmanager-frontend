@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { listarCitas } from "@/lib/api";
+import { listarCitasDelMes } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import {
   ChevronLeft,
@@ -42,36 +42,48 @@ function toKey(anio: number, mes: number, dia: number) {
   return `${anio}-${String(mes + 1).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
 }
 
-export function AgendaView({ citasIniciales }: { citasIniciales: Cita[] }) {
+export function AgendaView() {
   const router = useRouter();
-  const [citas, setCitas] = useState<Cita[]>(citasIniciales);
-  const [citaEditando, setCitaEditando] = useState<Cita | null>(null);
-
-  useEffect(() => {
-  let activo = true;
-
-  async function cargarCitas() {
-    try {
-      const citasBackend = await listarCitas();
-
-      if (activo) {
-        setCitas(citasBackend);
-      }
-    } catch (error) {
-      console.error("Error al cargar las citas:", error);
-    }
-  }
-
-  cargarCitas();
-
-  return () => {
-    activo = false;
-  };
-}, []);
-
   const hoy = new Date();
   const [vista, setVista] = useState({ anio: hoy.getFullYear(), mes: hoy.getMonth() });
   const [seleccionado, setSeleccionado] = useState<string | null>(null);
+  const [citaEditando, setCitaEditando] = useState<Cita | null>(null);
+
+  // solo se piden las citas del mes que se esta viendo, y se guardan por mes para no repetir la consulta
+  const [citasPorMes, setCitasPorMes] = useState<Record<string, Cita[]>>({});
+  const [cargandoMes, setCargandoMes] = useState(false);
+  const [errorMes, setErrorMes] = useState(false);
+  const [intento, setIntento] = useState(0);
+  const mesesCargados = useRef(new Set<string>());
+
+  const claveMes = `${vista.anio}-${String(vista.mes + 1).padStart(2, "0")}`;
+  const citas = citasPorMes[claveMes] ?? [];
+
+  useEffect(() => {
+    if (mesesCargados.current.has(claveMes)) return;
+
+    let activo = true;
+    setCargandoMes(true);
+    setErrorMes(false);
+
+    listarCitasDelMes(vista.anio, vista.mes)
+      .then((lista) => {
+        if (!activo) return;
+        mesesCargados.current.add(claveMes);
+        setCitasPorMes((prev) => ({ ...prev, [claveMes]: lista }));
+      })
+      .catch((error) => {
+        console.error("Error al cargar las citas del mes:", error);
+        if (activo) setErrorMes(true);
+      })
+      .finally(() => {
+        if (activo) setCargandoMes(false);
+      });
+
+    return () => {
+      activo = false;
+    };
+  }, [claveMes, vista.anio, vista.mes, intento]);
 
   const citasPorDia = useMemo(() => {
     const mapa = new Map<string, Cita[]>();
@@ -96,6 +108,7 @@ export function AgendaView({ citasIniciales }: { citasIniciales: Cita[] }) {
   while (celdas.length % 7 !== 0) celdas.push(null);
 
   function irMesAnterior() {
+    setSeleccionado(null);
     setVista((v) => {
       const mes = v.mes === 0 ? 11 : v.mes - 1;
       const anio = v.mes === 0 ? v.anio - 1 : v.anio;
@@ -104,6 +117,7 @@ export function AgendaView({ citasIniciales }: { citasIniciales: Cita[] }) {
   }
 
   function irMesSiguiente() {
+    setSeleccionado(null);
     setVista((v) => {
       const mes = v.mes === 11 ? 0 : v.mes + 1;
       const anio = v.mes === 11 ? v.anio + 1 : v.anio;
@@ -152,9 +166,24 @@ export function AgendaView({ citasIniciales }: { citasIniciales: Cita[] }) {
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <p className="text-base font-semibold">
-              {nombresMes[vista.mes]} {vista.anio}
-            </p>
+            <div className="text-center">
+              <p className="text-base font-semibold">
+                {nombresMes[vista.mes]} {vista.anio}
+              </p>
+              {cargandoMes && <p className="text-xs text-muted-foreground">Cargando citas del mes...</p>}
+              {errorMes && !cargandoMes && (
+                <p className="text-xs text-destructive">
+                  No se pudieron cargar las citas.{" "}
+                  <button
+                    type="button"
+                    className="font-medium underline"
+                    onClick={() => setIntento((n) => n + 1)}
+                  >
+                    Reintentar
+                  </button>
+                </p>
+              )}
+            </div>
             <button
               type="button"
               onClick={irMesSiguiente}
@@ -316,7 +345,10 @@ export function AgendaView({ citasIniciales }: { citasIniciales: Cita[] }) {
           cita={citaEditando}
           onClose={() => setCitaEditando(null)}
           onGuardada={(actualizada) => {
-            setCitas((prev) => prev.map((c) => (c.id === actualizada.id ? actualizada : c)));
+            setCitasPorMes((prev) => ({
+              ...prev,
+              [claveMes]: (prev[claveMes] ?? []).map((c) => (c.id === actualizada.id ? actualizada : c)),
+            }));
             router.refresh();
           }}
         />

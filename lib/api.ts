@@ -10,7 +10,10 @@ import type {
   RecetaCreada,
   MedicamentoReceta,
   OrigenReceta,
+  Examen,
+  CategoriaExamen,
 } from "@/lib/types";
+import { CATEGORIAS_EXAMEN } from "@/lib/constants";
 import { ApiError, extraerMensajeBackend, pistaParaError } from "@/lib/errors";
 import { logApiFallo, logApiOk, logInfo, logWarn } from "@/lib/logger";
 import { aFechaBackend } from "@/lib/fechas";
@@ -31,7 +34,9 @@ async function ejecutar(
     res = await fetch(url, {
       ...options,
       headers: {
-  "Content-Type": "application/json",
+  ...(typeof FormData !== "undefined" && options?.body instanceof FormData
+    ? {}
+    : { "Content-Type": "application/json" }),
   ...(typeof window !== "undefined" &&
   sessionStorage.getItem("accessToken")
     ? {
@@ -457,6 +462,43 @@ export async function listarCitas(): Promise<Cita[]> {
   return data.map(mapCita);
 }
 
+// trae solo las citas entre dos dias (formato yyyy-MM-dd, ambos incluidos), asi no se cargan todas
+// el rango se manda como instantes iso en utc calculados con la hora de chile, para no perder
+// citas de la noche ni traer de mas por el desfase entre zonas horarias.
+// ruta del back: GET /citas?fechaInicio=...&fechaFin=... (el negocio sale del token)
+export async function listarCitasPorRango(desde: string, hasta: string): Promise<Cita[]> {
+  const inicio = DateTime.fromISO(desde, { zone: "America/Santiago" }).startOf("day");
+  const fin = DateTime.fromISO(hasta, { zone: "America/Santiago" }).endOf("day");
+
+  if (!inicio.isValid || !fin.isValid || inicio > fin) {
+    throw new Error(`Rango de fechas inválido: ${desde} a ${hasta}`);
+  }
+
+  const query =
+    `fechaInicio=${encodeURIComponent(inicio.toUTC().toISO()!)}` +
+    `&fechaFin=${encodeURIComponent(fin.toUTC().toISO()!)}`;
+
+  let data: CitaBackend[];
+  try {
+    data = await request<CitaBackend[]>(`/citas?${query}`);
+  } catch (err) {
+    // el back anterior tenia la ruta como /citas/:negocioId, si no existe /citas probamos esa
+    // (se puede borrar este catch cuando todos los back tengan la ruta nueva)
+    if (err instanceof ApiError && err.status === 404) {
+      data = await request<CitaBackend[]>(`/citas/${NEGOCIO_ID}?${query}`);
+    } else {
+      throw err;
+    }
+  }
+
+  return data.map(mapCita).sort((a, b) => `${a.fecha} ${a.hora}`.localeCompare(`${b.fecha} ${b.hora}`));
+}
+
+export function listarCitasDelMes(anio: number, mes: number): Promise<Cita[]> {
+  const primero = DateTime.fromObject({ year: anio, month: mes + 1, day: 1 });
+  return listarCitasPorRango(primero.toFormat("yyyy-MM-dd"), primero.endOf("month").toFormat("yyyy-MM-dd"));
+}
+
 export async function crearCita(datos: {
   fecha: string;
   hora: string;
@@ -524,6 +566,16 @@ export async function listarBoletas(): Promise<Boleta[]> {
   return data.map(mapBoleta);
 }
 
+export type ItemCobrado = {
+  concepto: string;
+  precio: number;
+  origen: "vacuna" | "receta" | "manual";
+  claveOrigen?: string;
+};
+
+// manda la boleta con el detalle (items). si el back todavia no acepta "items" responde 400
+// ("property items should not exist"), en ese caso se reintenta sin detalle y se avisa con
+// itemsGuardadosEnBack=false para que el front use el respaldo local de lo cobrado.
 export async function crearBoleta(datos: {
   idDueno: number;
   idMascota: number;
@@ -531,20 +583,50 @@ export async function crearBoleta(datos: {
   montoTotal: number;
   estadoPago?: string;
   metodoPago?: string;
-}): Promise<Boleta> {
+  items?: ItemCobrado[];
+}): Promise<{ boleta: Boleta; itemsGuardadosEnBack: boolean }> {
+  const base = {
+    idNegocio: NEGOCIO_ID,
+    idCita: datos.idCita,
+    idDueno: datos.idDueno,
+    id_mascota: datos.idMascota,
+    montoTotal: datos.montoTotal,
+    estadoPago: datos.estadoPago,
+    metodoPago: datos.metodoPago,
+  };
+
+  if (datos.items && datos.items.length > 0) {
+    try {
+      const creada = await request<BoletaBackend>("/boletas", {
+        method: "POST",
+        body: JSON.stringify({ ...base, items: datos.items }),
+      });
+      return { boleta: mapBoleta(creada), itemsGuardadosEnBack: true };
+    } catch (err) {
+      const backViejo = err instanceof ApiError && err.status === 400 && /items/i.test(err.message);
+      if (!backViejo) throw err;
+      logWarn("el back todavia no acepta items en POST /boletas, se crea la boleta sin detalle");
+    }
+  }
+
   const creada = await request<BoletaBackend>("/boletas", {
     method: "POST",
-    body: JSON.stringify({
-      idNegocio: NEGOCIO_ID,
-      idCita: datos.idCita,
-      idDueno: datos.idDueno,
-      id_mascota: datos.idMascota,
-      montoTotal: datos.montoTotal,
-      estadoPago: datos.estadoPago,
-      metodoPago: datos.metodoPago,
-    }),
+    body: JSON.stringify(base),
   });
-  return mapBoleta(creada);
+  return { boleta: mapBoleta(creada), itemsGuardadosEnBack: false };
+}
+
+// claves ya cobradas de una mascota (["vacuna-12","receta-5::0"]). devuelve null si el back
+// todavia no tiene el endpoint, para que el front use el respaldo local
+export async function listarClavesCobradas(idMascota: string): Promise<string[] | null> {
+  try {
+    const data = await request<string[]>(`/boletas/items-cobrados?id_mascota=${encodeURIComponent(idMascota)}`);
+    return Array.isArray(data) ? data : null;
+  } catch (err) {
+    // 404 = ruta inexistente; 400 = el back la toma como /boletas/:id (ParseIntPipe)
+    if (err instanceof ApiError && (err.status === 404 || err.status === 400)) return null;
+    throw err;
+  }
 }
 
 export async function actualizarBoleta(
@@ -586,6 +668,51 @@ export async function actualizarDueno(
     method: "PATCH",
     body: JSON.stringify(body),
   });
+}
+
+// ---------- eliminar ----------
+// DELETE /mascotas/:id (el negocio sale del token)
+export async function eliminarPaciente(id: string): Promise<void> {
+  validarId(id, "la mascota a eliminar");
+  await requestSinRespuesta(`/mascotas/${id}`, { method: "DELETE" });
+}
+
+// DELETE /duenos/:id. ojo: el back no borra solo lo que depende del dueño, por eso se usa
+// eliminarDuenoConMascotas para borrar primero sus mascotas y solicitudes
+export async function eliminarDueno(id: string): Promise<void> {
+  validarId(id, "el dueño a eliminar");
+  await requestSinRespuesta(`/duenos/${id}`, { method: "DELETE" });
+}
+
+// borra al dueño y todo lo que cuelga de el: mascotas y solicitudes de emergencia asociadas.
+// se piden las mascotas de nuevo al back para no depender de una lista desactualizada
+export async function eliminarDuenoConMascotas(id: string): Promise<{ mascotas: number }> {
+  validarId(id, "el dueño a eliminar");
+
+  const pacientes = await listarPacientes();
+  const mascotas = pacientes.filter((p) => p.duenoId === id);
+
+  for (const m of mascotas) {
+    try {
+      await eliminarPaciente(m.id);
+    } catch (err) {
+      const detalle = err instanceof Error ? err.message : "error desconocido";
+      throw new Error(`No se pudo eliminar a la mascota ${m.nombre}: ${detalle}. El dueño no fue eliminado.`);
+    }
+  }
+
+  // las solicitudes apuntan al dueño y pueden impedir que se borre, asi que se limpian antes
+  try {
+    const solicitudes = await listarSolicitudes();
+    for (const s of solicitudes.filter((s) => s.duenoId === id)) {
+      await eliminarSolicitud(s.id);
+    }
+  } catch (err) {
+    logWarn(`no se pudieron limpiar las solicitudes del dueño ${id}, se intenta borrar igual`, err);
+  }
+
+  await eliminarDueno(id);
+  return { mascotas: mascotas.length };
 }
 
 export async function actualizarPaciente(
@@ -838,4 +965,71 @@ export async function crearReceta(datos: {
     body: JSON.stringify({ medicamentos_indicaciones: JSON.stringify(contenido) }),
   });
   return mapReceta(creada);
+}
+
+
+// ---------- examenes (storage + supabase) ----------
+type ExamenBackend = {
+  id_examen: number;
+  tipo_examen: string;
+  fecha_realizacion: string;
+  resultado_detalles?: string;
+  archivo_path: string;
+  url: string;
+  mascota: string;
+  id_mascota?: number;
+};
+
+function categoriaDesdeTipo(tipo: string): CategoriaExamen {
+  const t = normalizarTexto(tipo);
+  const encontrada = CATEGORIAS_EXAMEN.find(
+    (c) => normalizarTexto(c.label) === t || normalizarTexto(c.value) === t,
+  );
+  return encontrada?.value ?? "general";
+}
+
+// el back guarda la ruta como examenes/mascota-7/<prefijo>-<nombre>; se muestra solo el nombre
+function nombreDesdeRuta(ruta: string): string {
+  const archivo = ruta.split("/").pop() ?? ruta;
+  return archivo.replace(/^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|\d{10,})[-_]/i, "");
+}
+
+function mapExamen(e: ExamenBackend): Examen {
+  const nombre = nombreDesdeRuta(e.archivo_path);
+  return {
+    id: String(e.id_examen),
+    nombreArchivo: nombre,
+    tipoArchivo: nombre.toLowerCase().endsWith(".pdf") ? "pdf" : "imagen",
+    categoria: categoriaDesdeTipo(e.tipo_examen),
+    pacienteId: e.id_mascota != null ? String(e.id_mascota) : "",
+    pacienteNombre: e.mascota ?? "—",
+    fecha: e.fecha_realizacion,
+    url: e.url,
+  };
+}
+
+// GET /storage/examenes (el negocio sale del token). las urls firmadas duran 1 hora
+export async function listarExamenes(): Promise<Examen[]> {
+  const data = await request<ExamenBackend[]>("/storage/examenes");
+  return (data ?? []).map(mapExamen);
+}
+
+// POST /storage/examen (multipart). el campo del archivo se llama "archivo"
+export async function subirExamen(datos: {
+  archivo: File;
+  idMascota: string;
+  categoria: CategoriaExamen;
+  fecha: string;
+}): Promise<void> {
+  validarId(datos.idMascota, "la mascota del examen");
+  const etiqueta = CATEGORIAS_EXAMEN.find((c) => c.value === datos.categoria)?.label ?? "General";
+
+  const form = new FormData();
+  form.append("archivo", datos.archivo, datos.archivo.name);
+  form.append("id_mascota", datos.idMascota);
+  form.append("tipo_examen", etiqueta);
+  form.append("fecha_realizacion", datos.fecha);
+  form.append("resultado_detalles", "");
+
+  await requestSinRespuesta("/storage/examen", { method: "POST", body: form });
 }

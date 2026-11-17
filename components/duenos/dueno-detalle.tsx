@@ -3,10 +3,12 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { PawPrint, Pencil } from "lucide-react";
+import { PawPrint, Pencil, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { EditarDuenoDialog } from "@/components/duenos/editar-dueno-dialog";
+import { ConfirmarEliminarDialog } from "@/components/shared/confirmar-eliminar-dialog";
+import { eliminarDuenoConMascotas } from "@/lib/api";
 import { DatosContacto, iniciales } from "@/components/duenos/duenos-table";
 import { SEXOS, resolverOpcion } from "@/lib/constants";
 import type { Dueno, Paciente } from "@/lib/types";
@@ -20,6 +22,7 @@ function etiquetaSexo(valor?: string): string {
 export function DuenoDetalle({ dueno, mascotas }: { dueno: Dueno; mascotas: Paciente[] }) {
   const router = useRouter();
   const [editando, setEditando] = useState(false);
+  const [eliminando, setEliminando] = useState(false);
 
   return (
     <div className="space-y-5">
@@ -34,10 +37,20 @@ export function DuenoDetalle({ dueno, mascotas }: { dueno: Dueno; mascotas: Paci
           </nav>
           <h1 className="mt-1 text-2xl font-semibold">{dueno.nombre}</h1>
         </div>
-        <Button variant="outline" className="rounded-full" onClick={() => setEditando(true)}>
-          <Pencil className="mr-1.5 h-4 w-4" />
-          Editar Perfil
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            className="rounded-full text-destructive hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
+            onClick={() => setEliminando(true)}
+          >
+            <Trash2 className="mr-1.5 h-4 w-4" />
+            Eliminar
+          </Button>
+          <Button variant="outline" className="rounded-full" onClick={() => setEditando(true)}>
+            <Pencil className="mr-1.5 h-4 w-4" />
+            Editar Perfil
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[320px_1fr]">
@@ -91,6 +104,31 @@ export function DuenoDetalle({ dueno, mascotas }: { dueno: Dueno; mascotas: Paci
           )}
         </div>
       </div>
+
+      {eliminando && (
+        <ConfirmarEliminarDialog
+          titulo="Eliminar dueño"
+          etiquetaConfirmar={mascotas.length > 0 ? "Eliminar dueño y mascotas" : "Eliminar dueño"}
+          onClose={() => setEliminando(false)}
+          onConfirmar={async () => {
+            await eliminarDuenoConMascotas(dueno.id);
+            router.push("/dashboard/duenos");
+          }}
+        >
+          <p>
+            Se eliminará a <span className="font-semibold text-foreground">{dueno.nombre}</span>. Esta acción no se puede deshacer.
+          </p>
+          {mascotas.length > 0 ? (
+            <p className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-destructive">
+              Una mascota no puede existir sin tutor, así que también se eliminarán sus{" "}
+              <span className="font-semibold">{mascotas.length} mascota{mascotas.length === 1 ? "" : "s"}</span>
+              {" "}({mascotas.map((m) => m.nombre).join(", ")}) y sus solicitudes de emergencia, citas, recetas, vacunas y exámenes. Las boletas se conservan.
+            </p>
+          ) : (
+            <p>Este dueño no tiene mascotas registradas. También se borrarán sus solicitudes de emergencia y citas. Las boletas se conservan.</p>
+          )}
+        </ConfirmarEliminarDialog>
+      )}
 
       {editando && (
         <EditarDuenoDialog

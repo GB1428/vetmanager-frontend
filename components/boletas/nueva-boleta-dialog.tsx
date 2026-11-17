@@ -19,6 +19,7 @@ import { ESTADOS_PAGO, ESTADO_PAGO_INICIAL, METODOS_PAGO } from "@/lib/constants
 import { crearBoleta, listarHistorialVacunas, listarRecetas } from "@/lib/api";
 import { fechaLocalDeInstante, formatearFechaCorta, hoyLocalISO } from "@/lib/fechas";
 import { mensajeParaUsuario } from "@/lib/errors";
+import { marcarCobradosLocal, obtenerCobrados } from "@/lib/cobrados";
 import { logError, logInfo } from "@/lib/logger";
 import { formatearPeso } from "@/lib/utils";
 import type { Boleta, Cita, Dueno, ItemBoleta, Paciente, RecetaCreada, RegistroVacuna } from "@/lib/types";
@@ -68,6 +69,9 @@ export function NuevaBoletaDialog({
   const [registros, setRegistros] = useState<RegistroVacuna[]>([]);
   const [recetas, setRecetas] = useState<RecetaCreada[]>([]);
   const [cargandoVacunas, setCargandoVacunas] = useState(false);
+  // servicios que ya salieron en una boleta anterior: no se vuelven a ofrecer (salvo que se pida verlos)
+  const [cobrados, setCobrados] = useState<Set<string>>(new Set());
+  const [mostrarCobrados, setMostrarCobrados] = useState(false);
   const [totalManual, setTotalManual] = useState<string | null>(null);
   const [estadoPago, setEstadoPago] = useState(ESTADO_PAGO_INICIAL);
   const [metodoPago, setMetodoPago] = useState("");
@@ -77,6 +81,12 @@ export function NuevaBoletaDialog({
   const mascotasDelDueno = useMemo(() => pacientes.filter((p) => p.duenoId === duenoId), [pacientes, duenoId]);
   const citasDeLaMascota = useMemo(() => citas.filter((c) => c.mascotaId === pacienteId), [citas, pacienteId]);
   const citaSeleccionada = citasDeLaMascota.find((c) => c.id === citaId);
+
+  const itemsVisibles = useMemo(
+    () => items.filter((i) => mostrarCobrados || !cobrados.has(i.uid)),
+    [items, cobrados, mostrarCobrados],
+  );
+  const cantidadCobrados = items.filter((i) => cobrados.has(i.uid)).length;
 
   const totalCalculado = useMemo(
     () => items.filter((i) => i.incluido).reduce((acc, i) => acc + precioNumero(i.precio), 0),
@@ -95,8 +105,8 @@ export function NuevaBoletaDialog({
     setCargandoVacunas(true);
 
     // vacunas y recetas se piden juntas, si una falla la otra igual se muestra
-    Promise.allSettled([listarHistorialVacunas(pacienteId), listarRecetas()])
-      .then(([resVacunas, resRecetas]) => {
+    Promise.allSettled([listarHistorialVacunas(pacienteId), listarRecetas(), obtenerCobrados(pacienteId)])
+      .then(([resVacunas, resRecetas, resCobrados]) => {
         if (!activo) return;
 
         const listaVacunas = resVacunas.status === "fulfilled" ? resVacunas.value : [];
@@ -107,7 +117,14 @@ export function NuevaBoletaDialog({
         setRecetas(listaRecetas);
 
         const hoy = hoyLocalISO();
-        setItems((prev) => [
+        const yaCobrados = resCobrados.status === "fulfilled" ? resCobrados.value : new Set<string>();
+        setCobrados(yaCobrados);
+        setMostrarCobrados(false);
+
+        const sinCobrados = (lista: ItemBoleta[]) =>
+          lista.map((i) => (yaCobrados.has(i.uid) ? { ...i, incluido: false } : i));
+
+        setItems((prev) => sinCobrados([
           ...listaVacunas.map<ItemBoleta>((r) => ({
             uid: `vacuna-${r.id}`,
             concepto: `${r.vacunaNombre} · aplicada el ${formatearFechaCorta(fechaLocalDeInstante(r.fechaAplicacion))}`,
@@ -117,7 +134,7 @@ export function NuevaBoletaDialog({
           })),
           ...listaRecetas.flatMap((r) => itemsDeReceta(r, "", hoy)),
           ...prev.filter((i) => i.origen === "manual"),
-        ]);
+        ]));
 
         if (resVacunas.status === "rejected") {
           logError("no se pudieron cargar las vacunas de la mascota para la boleta", resVacunas.reason, {
@@ -175,11 +192,11 @@ export function NuevaBoletaDialog({
       prev.map((i) => {
         if (i.origen === "vacuna") {
           const registro = registros.find((r) => `vacuna-${r.id}` === i.uid);
-          return registro ? { ...i, incluido: incluirPorDefecto(registro, referencia) } : i;
+          return registro ? { ...i, incluido: !cobrados.has(i.uid) && incluirPorDefecto(registro, referencia) } : i;
         }
         if (i.origen === "receta") {
           const receta = recetas.find((r) => i.uid.startsWith(`receta-${r.id}::`));
-          return receta ? { ...i, incluido: incluirRecetaPorDefecto(receta, id, referencia) } : i;
+          return receta ? { ...i, incluido: !cobrados.has(i.uid) && incluirRecetaPorDefecto(receta, id, referencia) } : i;
         }
         return i;
       }),
@@ -228,15 +245,27 @@ export function NuevaBoletaDialog({
     setError(null);
 
     try {
-      const creada = await crearBoleta({
+      const incluidos = items.filter((i) => i.incluido);
+      const { boleta: creada, itemsGuardadosEnBack } = await crearBoleta({
         idDueno: Number(dueno.id),
         idMascota: Number(paciente.id),
         idCita: citaSeleccionada ? Number(citaSeleccionada.id) : undefined,
         montoTotal: monto,
         estadoPago: estadoPago.trim() || undefined,
         metodoPago: metodoPago.trim() || undefined,
+        items: incluidos.map((i) => ({
+          concepto: i.concepto.trim() || "Servicio",
+          precio: precioNumero(i.precio),
+          origen: i.origen,
+          claveOrigen: i.origen === "manual" ? undefined : i.uid,
+        })),
       });
-      logInfo("boleta creada", { idBoleta: creada.idBoleta, monto });
+      logInfo("boleta creada", { idBoleta: creada.idBoleta, monto, itemsGuardadosEnBack });
+
+      // si el back no guardo el detalle, lo cobrado se recuerda solo en este navegador
+      if (!itemsGuardadosEnBack) {
+        marcarCobradosLocal(incluidos.filter((i) => i.origen !== "manual").map((i) => i.uid));
+      }
 
       onCreada({
         ...creada,
@@ -353,13 +382,15 @@ export function NuevaBoletaDialog({
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   Cargando vacunas y recetas...
                 </p>
-              ) : items.length === 0 ? (
+              ) : itemsVisibles.length === 0 ? (
                 <p className="text-xs text-muted-foreground">
-                  Esta mascota no tiene vacunas ni recetas registradas. Agrega un concepto para cobrar.
+                  {cantidadCobrados > 0
+                    ? "Todos los servicios de esta mascota ya fueron cobrados. Agrega un concepto para cobrar algo nuevo."
+                    : "Esta mascota no tiene vacunas ni recetas registradas. Agrega un concepto para cobrar."}
                 </p>
               ) : (
                 <ul className="space-y-2">
-                  {items.map((i) => (
+                  {itemsVisibles.map((i) => (
                     <li key={i.uid} className="flex items-center gap-2">
                       <input
                         type="checkbox"
@@ -376,6 +407,11 @@ export function NuevaBoletaDialog({
                             <Syringe className="h-3.5 w-3.5 shrink-0 text-primary" />
                           )}
                           <span className="truncate">{i.concepto}</span>
+                          {cobrados.has(i.uid) && (
+                            <span className="shrink-0 rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                              Ya cobrado
+                            </span>
+                          )}
                         </span>
                       ) : (
                         <Input
@@ -408,6 +444,18 @@ export function NuevaBoletaDialog({
                     </li>
                   ))}
                 </ul>
+              )}
+
+              {cantidadCobrados > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setMostrarCobrados((v) => !v)}
+                  className="text-xs font-semibold text-primary hover:underline"
+                >
+                  {mostrarCobrados
+                    ? "Ocultar servicios ya cobrados"
+                    : `Ver ${cantidadCobrados} servicio${cantidadCobrados === 1 ? "" : "s"} ya cobrado${cantidadCobrados === 1 ? "" : "s"} en boletas anteriores`}
+                </button>
               )}
 
               <p className="text-xs text-muted-foreground">

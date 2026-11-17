@@ -3,10 +3,12 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CalendarCheck, CalendarPlus, Mail, MapPin, PawPrint, Pencil, Phone, Scale, Info } from "lucide-react";
+import { CalendarCheck, CalendarPlus, Mail, MapPin, PawPrint, Pencil, Phone, Scale, Info, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { EditarPacienteDialog } from "@/components/pacientes/editar-paciente-dialog";
+import { ConfirmarEliminarDialog } from "@/components/shared/confirmar-eliminar-dialog";
+import { eliminarPaciente } from "@/lib/api";
 import { VacunasPaciente } from "@/components/vacunas/vacunas-paciente";
 import { calcularEdad } from "@/lib/fechas";
 import { cn } from "@/lib/utils";
@@ -54,6 +56,7 @@ export function PacienteDetalle({
 }) {
   const router = useRouter();
   const [editando, setEditando] = useState(false);
+  const [eliminando, setEliminando] = useState(false);
   const [pestana, setPestana] = useState<"resumen" | "vacunas">("resumen");
 
   const edad = calcularEdad(paciente.fechaNacimiento);
@@ -91,6 +94,14 @@ export function PacienteDetalle({
           <Button variant="outline" className="rounded-full" onClick={() => setEditando(true)}>
             <Pencil className="mr-1.5 h-4 w-4" />
             Editar Datos
+          </Button>
+          <Button
+            variant="outline"
+            className="rounded-full text-destructive hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
+            onClick={() => setEliminando(true)}
+          >
+            <Trash2 className="mr-1.5 h-4 w-4" />
+            Eliminar
           </Button>
           <Button asChild className="rounded-full">
             <Link href="/dashboard/agenda/nueva">
@@ -245,6 +256,23 @@ export function PacienteDetalle({
         </div>
       ) : (
         <VacunasPaciente pacienteId={paciente.id} registros={vacunas} onCambio={() => router.refresh()} />
+      )}
+
+      {eliminando && (
+        <ConfirmarEliminarDialog
+          titulo="Eliminar paciente"
+          onClose={() => setEliminando(false)}
+          onConfirmar={async () => {
+            await eliminarPaciente(paciente.id);
+            router.push("/dashboard/pacientes");
+          }}
+        >
+          <p>
+            Se eliminará a <span className="font-semibold text-foreground">{paciente.nombre}</span> y su ficha. Esta acción no se
+            puede deshacer.
+          </p>
+          <p>También se eliminarán sus citas, recetas, vacunas y exámenes. Las boletas se conservan para el registro de ingresos.</p>
+        </ConfirmarEliminarDialog>
       )}
 
       {editando && (
