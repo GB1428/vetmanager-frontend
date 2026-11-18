@@ -404,7 +404,7 @@ function separarFechaHora(fechaHora: string): {
 } {
   const fechaChile = DateTime.fromISO(fechaHora, {
     zone: "utc",
-  }).setZone("America/Santiago");
+  })
 
   if (!fechaChile.isValid) {
     throw new Error(`Fecha inválida recibida del backend: ${fechaHora}`);
@@ -447,9 +447,7 @@ function construirFechaHoraParaBackend(
   fechaISO: string,
   hora: string,
 ): string {
-  const fechaChile = DateTime.fromISO(`${fechaISO}T${hora}`, {
-    zone: "America/Santiago",
-  });
+  const fechaChile = DateTime.fromISO(`${fechaISO}T${hora}`, );
 
   if (!fechaChile.isValid) {
     throw new Error(
@@ -457,7 +455,9 @@ function construirFechaHoraParaBackend(
     );
   }
 
-  return fechaChile.toUTC().toISO()!;
+return fechaChile.toFormat(
+    "yyyy-MM-dd'T'HH:mm:ss",
+  );
 }
 
 export async function listarCitas(): Promise<Cita[]> {
@@ -869,7 +869,7 @@ export async function crearRegistroVacuna(datos: {
       id_mascota: { id_mascota: datos.idMascota },
       id_vacuna: { id_vacuna: datos.idVacuna },
       lote: datos.lote,
-      proxima_dosis: aFechaBackend(datos.proximaDosis),
+proxima_dosis: datos.proximaDosis,
       observaciones: datos.observaciones,
     }),
   });
@@ -885,7 +885,7 @@ export async function actualizarRegistroVacuna(
     method: "PATCH",
     body: JSON.stringify({
       lote: datos.lote,
-      proxima_dosis: aFechaBackend(datos.proximaDosis),
+proxima_dosis: datos.proximaDosis,
       observaciones: datos.observaciones,
     }),
   });
